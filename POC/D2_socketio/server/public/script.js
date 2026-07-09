@@ -13,9 +13,13 @@ button.addEventListener("click", () => {
     input.value = "";
 
 });
-
+// Whenever the server sends me a reply event, run this function.
 socket.on("reply", (msg) => {
 
     reply.textContent = msg;
 
 });
+
+/**emit() means send a message.
+
+on() means listen for a message.**/
