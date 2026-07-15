@@ -24,5 +24,7 @@ const memoryChunkSchema = new mongoose.Schema({
 
 memoryChunkSchema.index({ meetingId: 1, chunkIndex: 1 });
 
-module.exports = mongoose.model('MemoryChunk', memoryChunkSchema);
 
+const MemoryChunk = mongoose.model("MemoryChunk", memoryChunkSchema);
+
+export default MemoryChunk;

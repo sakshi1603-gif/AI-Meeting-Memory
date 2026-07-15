@@ -35,4 +35,6 @@ const meetingSchema = new mongoose.Schema({
 
 meetingSchema.index({ createdAt: -1 });
 
-module.exports = mongoose.model('Meeting', meetingSchema);
+const Meeting = mongoose.model("Meeting", meetingSchema);
+
+export default Meeting;

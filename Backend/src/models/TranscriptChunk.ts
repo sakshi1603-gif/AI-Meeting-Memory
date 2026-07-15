@@ -19,4 +19,6 @@ const transcriptChunkSchema = new mongoose.Schema({
 
 transcriptChunkSchema.index({ meetingId: 1, startTime: 1 });
 
-module.exports = mongoose.model('TranscriptChunk', transcriptChunkSchema);
+const TranscriptChunk = mongoose.model('TranscriptChunk', transcriptChunkSchema);
+
+export default TranscriptChunk;
