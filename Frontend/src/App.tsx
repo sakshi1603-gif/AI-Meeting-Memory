@@ -58,6 +58,9 @@ function App() {
       <button onClick={StopRecording} disabled={!isRecording}>
         stop recording
       </button>
+      <button onClick={() => socket.emit("end-meeting")}>
+        End meeting
+      </button>
       <div>
         {transcript.map((line, i) => (
           <p key={i}>{line}</p>

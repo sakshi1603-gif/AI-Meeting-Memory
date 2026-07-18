@@ -7,15 +7,15 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
   let isDgOpen = false;
   let pendingChunks: Buffer[] = [];
   let meetingId: string | null = null;
-  let chunkIndex = 0;
 
   socket.on("start-recording", async () => {
     if (dgConnection) return;
-
     const meeting = await Meeting.create({
+      title: "Untitled Meeting",
       status: "active",
-      startTime: new Date(),
+      startedAt: new Date(),
     });
+
     meetingId = meeting._id.toString();
     socket.emit("meeting-started", { meetingId });
 
@@ -68,13 +68,7 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
       }
     });
 
-    dgConnection.on("close", (event: any) => {
-      console.log(
-        "Deepgram closed. code:",
-        event?.code,
-        "reason:",
-        event?.reason,
-      );
+    dgConnection.on("close", () => {
       isDgOpen = false;
       dgConnection = null;
     });
@@ -116,35 +110,48 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
   });
 
   socket.on("end-meeting", async () => {
-    if (!meetingId) return;
-
-    if (dgConnection && isDgOpen) {
-      dgConnection.socket.close();
-    }
-
     try {
+      if (!meetingId) return;
+
       const chunks = await TranscriptChunk.find({ meetingId })
-        .sort({ chunkIndex: 1 })
+        .sort({ startTime: 1 })
         .lean();
 
-      const fullTranscript = chunks.map((c: any) => c.text).join(" ");
+      const rawTranscript = chunks.map((c: any) => c.text).join(" ");
 
-      await Meeting.findByIdAndUpdate(meetingId, {
-        status: "ended",
-        endTime: new Date(),
-        fullTranscript,
-        chunkCount: chunks.length,
+      const meeting = await Meeting.findById(meetingId);
+
+      const endedAt = new Date();
+
+      const durationSeconds = meeting?.startedAt
+        ? Math.floor((endedAt.getTime() - meeting.startedAt.getTime()) / 1000)
+        : 0;
+
+      await Meeting.findByIdAndUpdate(
+        meetingId,
+        {
+          status: "ended",
+          endedAt,
+          durationSeconds,
+          rawTranscript,
+        },
+        { new: true },
+      );
+
+      socket.emit("meeting-saved", {
+        meetingId,
+        transcriptLength: rawTranscript.length,
       });
 
-      socket.emit("meeting-saved", { meetingId, chunkCount: chunks.length });
+      meetingId = null;
+      pendingChunks = [];
     } catch (err) {
       console.error("Failed to finalize meeting:", err);
-      socket.emit("meeting-save-error", { message: (err as Error).message });
-    }
 
-    dgConnection = null;
-    isDgOpen = false;
-    meetingId = null;
+      socket.emit("meeting-save-error", {
+        message: (err as Error).message,
+      });
+    }
   });
 
   socket.on("disconnect", () => {
