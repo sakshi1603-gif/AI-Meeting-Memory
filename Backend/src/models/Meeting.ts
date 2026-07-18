@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const actionItemSchema = new mongoose.Schema({
   text: { type: String, required: true, trim: true },
   owner: { type: String, trim: true, default: null },
+  dueDate: { type: String, default: null },  
   done: { type: Boolean, default: false }
 }, { _id: true });
 
@@ -28,6 +29,7 @@ const meetingSchema = new mongoose.Schema({
 
   summary: { type: String, default: null },      
   keyTopics: [{ type: String }],
+  keyDecisions: [{ type: String }],
   actionItems: [actionItemSchema],
 
   memoryIndexed: { type: Boolean, default: false }

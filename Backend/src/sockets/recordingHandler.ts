@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import deepgram from "../services/deepgram.service";
 import { TranscriptChunk, Meeting } from "../models/index";
+import { generateAndSaveMemory } from "../services/memory.service";
 
 export const registerRecordingHandlers = (io: Server, socket: Socket) => {
   let dgConnection: any = null;
@@ -143,8 +144,35 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
         transcriptLength: rawTranscript.length,
       });
 
+      // --- NEW: trigger summarization, but don't block meeting-saved on it ---
+      const summarizedMeetingId = meetingId; // capture before reset below
       meetingId = null;
       pendingChunks = [];
+
+      if (rawTranscript.trim().length === 0) {
+        socket.emit("summary-error", {
+          message: "No transcript captured — nothing to summarize.",
+        });
+        return;
+      }
+
+      socket.emit("processing-started");
+
+      try {
+        const structured = await generateAndSaveMemory(
+          summarizedMeetingId,
+          rawTranscript,
+        );
+        socket.emit("summary-ready", {
+          meetingId: summarizedMeetingId,
+          ...structured,
+        });
+      } catch (summaryErr) {
+        console.error("Summarization failed:", summaryErr);
+        socket.emit("summary-error", {
+          message: "Failed to generate summary.",
+        });
+      }
     } catch (err) {
       console.error("Failed to finalize meeting:", err);
 
