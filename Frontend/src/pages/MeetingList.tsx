@@ -1,31 +1,33 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import type { Meeting } from '../types/meeting';
-import './Meetings.css';
-
-const API_BASE = 'http://localhost:5000/api';
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import type { Meeting } from "../types/meeting";
+import api from "../api/api";
+import "./Meetings.css";
 
 const statusColor: Record<string, string> = {
-  active: '#4dff8f',
-  processing: '#ffcc4d',
-  ended: '#8892a0',
-  failed: '#ff4d5e',
+  active: "#4dff8f",
+  processing: "#ffcc4d",
+  ended: "#8892a0",
+  failed: "#ff4d5e",
 };
 
 export default function MeetingList() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
-    fetch(`${API_BASE}/meetings`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to fetch (${res.status})`);
-        return res.json();
-      })
-      .then((data) => setMeetings(data))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    const fetchMeetings = async () => {
+      try {
+        const res = await api.get<Meeting[]>("/meetings");
+        setMeetings(res.data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMeetings();
   }, []);
 
   const formatDuration = (sec: number) => {
@@ -34,7 +36,8 @@ export default function MeetingList() {
     return `${m}m ${s}s`;
   };
 
-  if (loading) return <div className="mm-page mm-center">Loading meetings…</div>;
+  if (loading)
+    return <div className="mm-page mm-center">Loading meetings…</div>;
   if (error) return <div className="mm-page mm-center mm-error">{error}</div>;
 
   return (
@@ -52,6 +55,7 @@ export default function MeetingList() {
             <Link to={`/meetings/${m._id}`} key={m._id} className="mm-card">
               <div className="mm-card-top">
                 <h3>{m.title}</h3>
+
                 <span
                   className="mm-pill"
                   style={{
@@ -62,16 +66,21 @@ export default function MeetingList() {
                   {m.status}
                 </span>
               </div>
+
               {m.summary && <p className="mm-summary-preview">{m.summary}</p>}
+
               <div className="mm-card-meta">
                 <span>{new Date(m.startedAt).toLocaleString()}</span>
                 <span>{formatDuration(m.durationSeconds)}</span>
                 <span>{m.participants.length} participants</span>
               </div>
+
               {m.keyTopics.length > 0 && (
                 <div className="mm-tags">
                   {m.keyTopics.slice(0, 4).map((t, i) => (
-                    <span key={i} className="mm-tag">{t}</span>
+                    <span key={i} className="mm-tag">
+                      {t}
+                    </span>
                   ))}
                 </div>
               )}

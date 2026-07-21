@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import type { Meeting } from '../types/meeting';
-import './Meetings.css';
-
-const API_BASE = 'http://localhost:5000/api';
+import { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import type { Meeting } from "../types/meeting";
+import api from "../api/api";
+import "./Meetings.css";
 
 export default function MeetingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -13,14 +12,18 @@ export default function MeetingDetail() {
   const [showTranscript, setShowTranscript] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE}/meetings/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to fetch (${res.status})`);
-        return res.json();
-      })
-      .then((data) => setMeeting(data))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    const fetchMeeting = async () => {
+      try {
+        const res = await api.get<Meeting>(`/meetings/${id}`);
+        setMeeting(res.data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMeeting();
   }, [id]);
 
   if (loading) return <div className="mm-page mm-center">Loading meeting…</div>;
@@ -29,13 +32,17 @@ export default function MeetingDetail() {
 
   return (
     <div className="mm-page">
-      <Link to="/" className="mm-back">← All meetings</Link>
+      <Link to="/" className="mm-back">
+        ← All meetings
+      </Link>
 
       <div className="mm-detail-header">
         <h1>{meeting.title}</h1>
         <div className="mm-detail-meta">
           <span>{new Date(meeting.startedAt).toLocaleString()}</span>
-          <span>{meeting.participants.join(', ') || 'No participants listed'}</span>
+          <span>
+            {meeting.participants.join(", ") || "No participants listed"}
+          </span>
         </div>
       </div>
 
@@ -50,7 +57,9 @@ export default function MeetingDetail() {
         <section className="mm-panel">
           <h2>Key Decisions</h2>
           <ul className="mm-list-plain">
-            {meeting.keyDecisions.map((d, i) => <li key={i}>{d}</li>)}
+            {meeting.keyDecisions.map((d, i) => (
+              <li key={i}>{d}</li>
+            ))}
           </ul>
         </section>
       )}
@@ -60,11 +69,16 @@ export default function MeetingDetail() {
           <h2>Action Items</h2>
           <div className="mm-actions">
             {meeting.actionItems.map((a) => (
-              <div key={a._id} className={`mm-action ${a.done ? 'mm-action-done' : ''}`}>
-                <span className="mm-action-check">{a.done ? '✓' : '○'}</span>
+              <div
+                key={a._id}
+                className={`mm-action ${a.done ? "mm-action-done" : ""}`}
+              >
+                <span className="mm-action-check">{a.done ? "✓" : "○"}</span>
                 <span className="mm-action-text">{a.text}</span>
                 {a.owner && <span className="mm-action-owner">{a.owner}</span>}
-                {a.dueDate && <span className="mm-action-due">{a.dueDate}</span>}
+                {a.dueDate && (
+                  <span className="mm-action-due">{a.dueDate}</span>
+                )}
               </div>
             ))}
           </div>
@@ -72,11 +86,16 @@ export default function MeetingDetail() {
       )}
 
       <section className="mm-panel">
-        <button className="mm-toggle" onClick={() => setShowTranscript((s) => !s)}>
-          {showTranscript ? 'Hide' : 'Show'} Transcript
+        <button
+          className="mm-toggle"
+          onClick={() => setShowTranscript((s) => !s)}
+        >
+          {showTranscript ? "Hide" : "Show"} Transcript
         </button>
         {showTranscript && (
-          <pre className="mm-transcript">{meeting.rawTranscript || 'No transcript available.'}</pre>
+          <pre className="mm-transcript">
+            {meeting.rawTranscript || "No transcript available."}
+          </pre>
         )}
       </section>
     </div>

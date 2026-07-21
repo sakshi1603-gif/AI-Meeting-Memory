@@ -8,7 +8,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const meetings = await Meeting.find({})
       .select('title status startedAt endedAt durationSeconds participants summary keyTopics createdAt')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 }); // newest meeting appears first 
     res.json(meetings);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
