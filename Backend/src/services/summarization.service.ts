@@ -34,9 +34,7 @@ const RESPONSE_SCHEMA = {
   required: ['summary', 'keyDecisions', 'actionItems'],
 };
 
-export async function extractStructuredSummary(
-  transcriptText: string
-): Promise<MeetingSummary> {
+export async function extractStructuredSummary(transcriptText: string): Promise<MeetingSummary> {
   const response = await ai.models.generateContent({
     model: "gemini-3.1-flash-lite",
     contents: [

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const memoryChunkSchema = new mongoose.Schema({
   meetingId: {
@@ -7,8 +7,8 @@ const memoryChunkSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  content: { type: String, required: true },  
-  chunkIndex: { type: Number, required: true }, 
+  content: { type: String, required: true },
+  chunkIndex: { type: Number, required: true },
 
   embedding: {
     type: [Number],
@@ -17,14 +17,13 @@ const memoryChunkSchema = new mongoose.Schema({
 
   metadata: {
     speakers: [{ type: String }],
-    startTime: { type: Number }, 
+    startTime: { type: Number },
     endTime: { type: Number }
   }
 }, { timestamps: true });
 
 memoryChunkSchema.index({ meetingId: 1, chunkIndex: 1 });
 
-
-const MemoryChunk = mongoose.model("MemoryChunk", memoryChunkSchema);
+const MemoryChunk = mongoose.model('MemoryChunk', memoryChunkSchema);
 
 export default MemoryChunk;

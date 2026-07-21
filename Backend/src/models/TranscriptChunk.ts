@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const transcriptChunkSchema = new mongoose.Schema({
   meetingId: {
@@ -10,7 +10,7 @@ const transcriptChunkSchema = new mongoose.Schema({
   speaker: { type: String, default: 'Speaker 0' },
   text: { type: String, required: true },
 
-  startTime: { type: Number, required: true }, 
+  startTime: { type: Number, required: true },
   endTime: { type: Number, required: true },
   confidence: { type: Number, default: null },
 

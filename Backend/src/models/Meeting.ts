@@ -1,9 +1,9 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const actionItemSchema = new mongoose.Schema({
   text: { type: String, required: true, trim: true },
   owner: { type: String, trim: true, default: null },
-  dueDate: { type: String, default: null },  
+  dueDate: { type: String, default: null },
   done: { type: Boolean, default: false }
 }, { _id: true });
 
@@ -24,10 +24,10 @@ const meetingSchema = new mongoose.Schema({
   endedAt: { type: Date, default: null },
   durationSeconds: { type: Number, default: 0 },
 
-  participants: [{ type: String, trim: true }], 
+  participants: [{ type: String, trim: true }],
   rawTranscript: { type: String, default: '' },
 
-  summary: { type: String, default: null },      
+  summary: { type: String, default: null },
   keyTopics: [{ type: String }],
   keyDecisions: [{ type: String }],
   actionItems: [actionItemSchema],
@@ -37,6 +37,6 @@ const meetingSchema = new mongoose.Schema({
 
 meetingSchema.index({ createdAt: -1 });
 
-const Meeting = mongoose.model("Meeting", meetingSchema);
+const Meeting = mongoose.model('Meeting', meetingSchema);
 
 export default Meeting;

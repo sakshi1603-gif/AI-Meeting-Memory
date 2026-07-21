@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 
 import { connectMongo } from "./services/mongo.service";
 import { registerRecordingHandlers } from "./sockets/recordingHandler";
-import meetingsRouter from "./routes/meetings";
+import meetingsRouter from './routes/meetings';
 
 dotenv.config();
 
