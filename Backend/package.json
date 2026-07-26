@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "embed:transcripts": "tsx src/scripts/generateMeetingEmbeddings.ts",
+    "embed:verify": "tsx src/scripts/verifyMeetingEmbeddings.ts"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +30,7 @@
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
+    "tsx": "^4.23.1",
     "typescript": "^6.0.3"
   }
 }
