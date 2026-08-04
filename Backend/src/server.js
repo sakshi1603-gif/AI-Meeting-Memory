@@ -8,6 +8,10 @@ const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
 const app = (0, express_1.default)();
+import queryRouter from './routes/query';
+import authRouter from './routes/auth';
+
+
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.get("/", (req, res) => {
@@ -15,6 +19,8 @@ app.get("/", (req, res) => {
         message: "Backend is running 🚀",
     });
 });
+app.use('/api', queryRouter);
+app.use('/api/auth', authRouter);
 const server = http_1.default.createServer(app);
 const io = new socket_io_1.Server(server, {
     cors: {

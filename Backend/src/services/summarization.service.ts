@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { MeetingSummarySchema, MeetingSummary } from '../schemas/summary.schema';
+import { answerSchema, QueryAnswer } from '../schemas/queryAnswer.schema';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -34,6 +35,35 @@ const RESPONSE_SCHEMA = {
   required: ['summary', 'keyDecisions', 'actionItems'],
 };
 
+const QUERY_SYSTEM_PROMPT = `Answer using ONLY the excerpts provided. Each excerpt is tagged with meeting title, date, and timestamp.
+Rules:
+- Every claim must cite the excerpt's meeting title and timestamp — no exceptions.
+- If the excerpts don't answer the question, say so plainly and set confidence to "low". Do not guess.
+- If meetings conflict, note the disagreement and cite both.
+- Never invent a timestamp or meeting name not shown in the excerpts.`;
+
+const QUERY_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    answer: { type: Type.STRING },
+    citations: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          meetingTitle: { type: Type.STRING },
+          meetingId: { type: Type.STRING },
+          timestamp: { type: Type.STRING },
+          quote: { type: Type.STRING },
+        },
+        required: ['meetingTitle', 'meetingId', 'timestamp', 'quote'],
+      },
+    },
+    confidence: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
+  },
+  required: ['answer', 'citations', 'confidence'],
+};
+
 export async function extractStructuredSummary(transcriptText: string): Promise<MeetingSummary> {
   const response = await ai.models.generateContent({
     model: "gemini-3.1-flash-lite",
@@ -48,6 +78,28 @@ export async function extractStructuredSummary(transcriptText: string): Promise<
 
   const raw = response.text ?? '';
   return safeParseJSON(raw);
+}
+
+export function buildQueryPrompt(question: string, context: string): string {
+  return `${QUERY_SYSTEM_PROMPT}\n\nEXCERPTS:\n${context}\n\nQUESTION: ${question}`;
+}
+
+export async function answerQuery(question: string, context: string): Promise<QueryAnswer> {
+  const prompt = buildQueryPrompt(question, context);
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3.1-flash-lite",
+    contents: [
+      { role: 'user', parts: [{ text: prompt }] },
+    ],
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: QUERY_RESPONSE_SCHEMA,
+    },
+  });
+
+  const raw = response.text ?? '';
+  return safeParseQueryJSON(raw);
 }
 
 function safeParseJSON(raw: string): MeetingSummary {
@@ -75,11 +127,44 @@ function safeParseJSON(raw: string): MeetingSummary {
   return coerceToSchema(candidate);
 }
 
+function safeParseQueryJSON(raw: string): QueryAnswer {
+  let candidate: any;
+
+  try {
+    candidate = JSON.parse(raw);
+  } catch {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        candidate = JSON.parse(jsonMatch[0]);
+      } catch {
+        return fallbackQueryAnswer();
+      }
+    } else {
+      return fallbackQueryAnswer();
+    }
+  }
+
+  const parsed = answerSchema.safeParse(candidate);
+  if (parsed.success) return parsed.data;
+
+  console.warn('Query schema validation failed:', parsed.error.issues);
+  return coerceToQuerySchema(candidate);
+}
+
 function fallbackSummary(): MeetingSummary {
   return {
     summary: 'Summary extraction failed — could not parse model output.',
     keyDecisions: [],
     actionItems: [],
+  };
+}
+
+function fallbackQueryAnswer(): QueryAnswer {
+  return {
+    answer: 'Could not parse a response — please try rephrasing the question.',
+    citations: [],
+    confidence: 'low',
   };
 }
 
@@ -98,5 +183,22 @@ function coerceToSchema(raw: any): MeetingSummary {
             dueDate: typeof a.dueDate === 'string' ? a.dueDate : null,
           }))
       : [],
+  };
+}
+
+function coerceToQuerySchema(raw: any): QueryAnswer {
+  return {
+    answer: typeof raw?.answer === 'string' ? raw.answer : 'Answer unavailable.',
+    citations: Array.isArray(raw?.citations)
+      ? raw.citations
+          .filter((c: any) => c && typeof c.meetingTitle === 'string' && typeof c.timestamp === 'string')
+          .map((c: any) => ({
+            meetingTitle: c.meetingTitle,
+            meetingId: typeof c.meetingId === 'string' ? c.meetingId : '',
+            timestamp: c.timestamp,
+            quote: typeof c.quote === 'string' ? c.quote : '',
+          }))
+      : [],
+    confidence: ['high', 'medium', 'low'].includes(raw?.confidence) ? raw.confidence : 'low',
   };
 }
