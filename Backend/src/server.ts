@@ -8,13 +8,16 @@ import { connectMongo } from "./services/mongo.service";
 import { registerRecordingHandlers } from "./sockets/recordingHandler";
 import meetingsRouter from './routes/meetings';
 
+import queryRouter from './routes/query';
+import authRouter from './routes/auth';
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use("/api/meetings", meetingsRouter);
-
+app.use('/api', queryRouter);
+app.use('/api/auth', authRouter);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
