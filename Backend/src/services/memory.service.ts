@@ -1,7 +1,7 @@
 import { extractStructuredSummary } from './summarization.service';
-import { Meeting } from "../models/index";
-
-
+import { Meeting, TranscriptChunk, MemoryChunk } from "../models/index";
+import { chunkTranscript } from '../utils/transcriptChunker.util';
+import { generateEmbeddings } from './embedding.service';
 export async function generateAndSaveMemory(meetingId: string, rawTranscript: string) {
   const structured = await extractStructuredSummary(rawTranscript);
 
@@ -18,4 +18,35 @@ export async function generateAndSaveMemory(meetingId: string, rawTranscript: st
   });
 
   return structured;
+}
+export async function embedMeeting(meetingId: string): Promise<void> {
+  const transcriptDocs = await TranscriptChunk.find({ meetingId }).sort({ startTime: 1 }).lean();
+  if (transcriptDocs.length === 0) return;
+
+  const segments = transcriptDocs.map((d: any) => ({
+    text: d.text,
+    speaker: d.speaker,
+    startTime: d.startTime ?? 0,
+    endTime: d.endTime ?? 0
+  }));
+
+  const chunks = chunkTranscript(segments);
+  if (chunks.length === 0) return;
+
+  const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
+  if (embeddings.length !== chunks.length) {
+    throw new Error(`Embedding count mismatch for meeting ${meetingId}`);
+  }
+
+  await MemoryChunk.deleteMany({ meetingId });
+
+  const docs = chunks.map((chunk, i) => ({
+    meetingId,
+    content: chunk.content,
+    chunkIndex: i,
+    embedding: embeddings[i],
+    metadata: { speakers: chunk.speakers, startTime: chunk.startTime, endTime: chunk.endTime }
+  }));
+
+  await MemoryChunk.insertMany(docs);
 }

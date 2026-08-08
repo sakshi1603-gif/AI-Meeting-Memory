@@ -4,7 +4,7 @@ import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
 
-import { connectMongo } from "./services/mongo.service";
+import { connectMongo } from "./config/mongo.service";
 import { registerRecordingHandlers } from "./sockets/recordingHandler";
 import meetingsRouter from './routes/meetings';
 

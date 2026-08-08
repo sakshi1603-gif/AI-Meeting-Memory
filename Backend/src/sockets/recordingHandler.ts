@@ -1,7 +1,10 @@
 import { Server, Socket } from "socket.io";
-import deepgram from "../services/deepgram.service";
+import deepgram from "../config/deepgram.service";
 import { TranscriptChunk, Meeting } from "../models/index";
-import { generateAndSaveMemory } from "../services/memory.service";
+import {
+  generateAndSaveMemory,
+  embedMeeting,
+} from "../services/memory.service";
 
 export const registerRecordingHandlers = (io: Server, socket: Socket) => {
   let dgConnection: any = null;
@@ -144,8 +147,7 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
         transcriptLength: rawTranscript.length,
       });
 
-      // --- NEW: trigger summarization, but don't block meeting-saved on it ---
-      const summarizedMeetingId = meetingId; // capture before reset below
+      const summarizedMeetingId = meetingId;
       meetingId = null;
       pendingChunks = [];
 
@@ -163,6 +165,9 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
           summarizedMeetingId,
           rawTranscript,
         );
+
+        await embedMeeting(summarizedMeetingId);
+
         socket.emit("summary-ready", {
           meetingId: summarizedMeetingId,
           ...structured,
