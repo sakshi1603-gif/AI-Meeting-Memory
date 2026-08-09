@@ -1,58 +1,77 @@
-import { Router, Response } from 'express';
-import Meeting from '../models/Meeting';
-import { embedQuery } from '../services/embedding.service';
-import { searchAcrossMeetings } from '../services/vectorSearch.service';
-import { answerQuery } from '../services/summarization.service';
-import { formatTimestamp } from '../utils/time';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { Router, Response } from "express";
+import Meeting from "../models/Meeting";
+import { embedQuery } from "../services/embedding.service";
+import { searchAcrossMeetings } from "../services/vectorSearch.service";
+import { answerQuery } from "../services/summarization.service";
+import { formatTimestamp } from "../utils/time";
+import { authMiddleware, AuthRequest } from "../middleware/auth";
 
 const router = Router();
 
-router.post('/query', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { question, meetingId } = req.body;
+router.post("/query",authMiddleware,async (req: AuthRequest, res: Response) => {
+    const { question, meetingId } = req.body;
+    const userId = req.userId;
 
-  if (!question?.trim()) {
-    return res.status(400).json({ error: 'question is required' });
-  }
-
-  try {
-    const queryEmbedding = await embedQuery(question);
-    const chunks = await searchAcrossMeetings(queryEmbedding, { meetingId, limit: 8 });
-
-    if (!chunks.length) {
-      return res.json({
-        answer: "I couldn't find anything relevant in your meetings.",
-        citations: [],
-        confidence: 'low'
-      });
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const ids = [...new Set(chunks.map(c => c.meetingId.toString()))];
-    const meetings = await Meeting.find({ _id: { $in: ids } })
-      .select('title startedAt')
-      .lean();
+    if (!question?.trim()) {
+      return res.status(400).json({ error: "question is required" });
+    }
 
-    const meetingMap = Object.fromEntries(
-      meetings.map(m => [m._id.toString(), m])
-    );
+    try {
+      const queryEmbedding = await embedQuery(question);
 
-    const context = chunks
-      .map((c, i) => {
-        const m = meetingMap[c.meetingId.toString()];
-        const timestamp = c.metadata?.startTime != null
-          ? formatTimestamp(c.metadata.startTime)
-          : 'unknown';
-        return `[${i + 1}] Meeting: "${m?.title}" | Date: ${m?.startedAt?.toString()} | Timestamp: ${timestamp}\n${c.content}`;
-      })
-      .join('\n\n');
+      const chunks = await searchAcrossMeetings(queryEmbedding, {
+        userId,
+        meetingId: meetingId || undefined,
+        limit: 8,
+      });
 
-    const result = await answerQuery(question, context);
+      if (!chunks.length) {
+        return res.json({
+          answer: "I couldn't find anything relevant in your meetings.",
+          citations: [],
+          confidence: "low",
+        });
+      }
 
-    res.json(result);
-  } catch (err) {
-    console.error('Query error:', err);
-    res.status(500).json({ error: 'Failed to process query' });
-  }
-});
+      const ids = [...new Set(chunks.map((c) => c.meetingId.toString()))];
+      const meetings = await Meeting.find({ _id: { $in: ids }, userId })
+        .select("title startedAt")
+        .lean();
+
+      const meetingMap = Object.fromEntries(
+        meetings.map((m) => [m._id.toString(), m]),
+      );
+
+      const context = chunks
+        .map((c, i) => {
+          const m = meetingMap[c.meetingId.toString()];
+          const timestamp =
+            c.metadata?.startTime != null
+              ? formatTimestamp(c.metadata.startTime)
+              : "unknown";
+          return `[${i + 1}] Meeting: "${m?.title}" | Date: ${m?.startedAt?.toString()} | Timestamp: ${timestamp}\n${c.content}`;
+        })
+        .join("\n\n");
+
+      const result = await answerQuery(question, context);
+
+      res.json({
+        ...result,
+        sources: ids.map((id) => ({
+          meetingId: id,
+          title: meetingMap[id]?.title,
+          startedAt: meetingMap[id]?.startedAt,
+        })),
+      });
+    } catch (err) {
+      console.error("Query error:", err);
+      res.status(500).json({ error: "Failed to process query" });
+    }
+  },
+);
 
 export default router;

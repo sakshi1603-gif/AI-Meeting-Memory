@@ -1,41 +1,34 @@
-import mongoose from 'mongoose';
 import MemoryChunk from '../models/MemoryChunk';
+import mongoose from 'mongoose';
 
 interface SearchOptions {
+  userId: string;
+  meetingId?: string;
   limit?: number;
-  meetingId?: string | null;
-  minScore?: number;
 }
 
-interface SearchResult {
-  _id: mongoose.Types.ObjectId;
-  content: string;
-  meetingId: mongoose.Types.ObjectId;
-  metadata: {
-    speakers: string[];
-    startTime?: number;
-    endTime?: number;
+export async function searchAcrossMeetings(queryEmbedding: number[],options: SearchOptions) {
+  const { userId, meetingId, limit = 8 } = options;
+
+  const filter: Record<string, any> = {
+    userId: new mongoose.Types.ObjectId(userId)
   };
-  score: number;
-}
 
-export async function searchAcrossMeetings(
-  queryEmbedding: number[],
-  { limit = 8, meetingId = null, minScore = 0.65 }: SearchOptions = {}
-): Promise<SearchResult[]> {
-  const pipeline: mongoose.PipelineStage[] = [
+  if (meetingId) {
+    filter.meetingId = new mongoose.Types.ObjectId(meetingId);
+  }
+
+  const results = await MemoryChunk.aggregate([
     {
       $vectorSearch: {
-        index: 'memory_vector_index',
+        index: 'vector_index',
         path: 'embedding',
         queryVector: queryEmbedding,
-        numCandidates: 150,
+        numCandidates: limit * 15,
         limit,
-        ...(meetingId && {
-          filter: { meetingId: new mongoose.Types.ObjectId(meetingId) }
-        })
+        filter
       }
-    } as any,
+    },
     {
       $project: {
         content: 1,
@@ -43,9 +36,8 @@ export async function searchAcrossMeetings(
         metadata: 1,
         score: { $meta: 'vectorSearchScore' }
       }
-    },
-    { $match: { score: { $gte: minScore } } }
-  ];
+    }
+  ]);
 
-  return MemoryChunk.aggregate(pipeline);
+  return results;
 }

@@ -1,3 +1,4 @@
+//This defines what one segment should look like.
 interface TranscriptSegment {
   text: string;
   speaker?: string;

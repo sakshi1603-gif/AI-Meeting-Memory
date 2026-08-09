@@ -2,6 +2,8 @@ import { extractStructuredSummary } from './summarization.service';
 import { Meeting, TranscriptChunk, MemoryChunk } from "../models/index";
 import { chunkTranscript } from '../utils/transcriptChunker.util';
 import { generateEmbeddings } from './embedding.service';
+
+
 export async function generateAndSaveMemory(meetingId: string, rawTranscript: string) {
   const structured = await extractStructuredSummary(rawTranscript);
 
@@ -19,6 +21,8 @@ export async function generateAndSaveMemory(meetingId: string, rawTranscript: st
 
   return structured;
 }
+
+
 export async function embedMeeting(meetingId: string): Promise<void> {
   const transcriptDocs = await TranscriptChunk.find({ meetingId }).sort({ startTime: 1 }).lean();
   if (transcriptDocs.length === 0) return;
