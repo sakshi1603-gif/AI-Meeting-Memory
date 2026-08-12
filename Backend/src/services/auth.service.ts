@@ -41,6 +41,19 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
   return buildAuthResult(user);
 }
 
+export async function getUserById(userId: string): Promise<{ id: string; name: string; email: string } | null> {
+  const user = await User.findById(userId);
+  if (!user) {
+    return null;
+  }
+
+  return {
+    id: user._id.toString(),
+    name: user.name,
+    email: user.email
+  };
+}
+
 function buildAuthResult(user: IUser): AuthResult {
   const token = jwt.sign({ userId: user._id.toString() }, JWT_SECRET as string, {
     expiresIn: JWT_EXPIRES_IN
@@ -55,3 +68,4 @@ function buildAuthResult(user: IUser): AuthResult {
     }
   };
 }
+

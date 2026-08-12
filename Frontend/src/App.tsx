@@ -16,9 +16,11 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
 
+          <Route element={<ProtectedRoute />}>
             <Route path="/" element={<MeetingList />} />
             <Route path="/meetings/:id" element={<MeetingDetail />} />
             <Route path="/record" element={<Recorder />} />
+          </Route>
         </Routes>
       </AuthProvider>
     </BrowserRouter>
