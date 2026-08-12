@@ -1,0 +1,22 @@
+:root {
+  --ink-bg: #0B0E14;
+  --ink-surface: #12151D;
+  --ink-surface-2: #151822;
+  --ink-border: #23252E;
+
+  --indigo: #8B93FF;
+  --indigo-dim: rgba(139, 147, 255, 0.12);
+  --amber: #F2B134;
+  --amber-dim: rgba(242, 177, 52, 0.14);
+
+  --text-primary: #E8E9ED;
+  --text-secondary: #9CA0AE;
+  --text-faint: #6B7280;
+
+  --danger: #E2716B;
+  --danger-dim: rgba(226, 113, 107, 0.12);
+
+  --font-display: "Source Serif 4", Georgia, serif;
+  --font-sans: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}

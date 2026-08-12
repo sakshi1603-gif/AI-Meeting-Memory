@@ -4,7 +4,7 @@ import { registerUser, loginUser } from '../services/auth.service';
 
 const router = Router();
 
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/signup', async (req: Request, res: Response) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid input', details: parsed.error.issues });
