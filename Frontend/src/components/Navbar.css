@@ -1,0 +1,148 @@
+/* ============================================================
+   NAVBAR.CSS
+   Depends on: styles/theme.css (import theme.css first, globally)
+   ============================================================ */
+
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--ink-bg);
+  border-bottom: 1px solid var(--ink-border);
+}
+
+.navbar-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  height: 64px;
+  padding: 0 var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.navbar-logo {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.navbar-logo:hover { text-decoration: none; opacity: 0.85; }
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex: 1;
+}
+
+.navbar-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 6px 0;
+  position: relative;
+}
+.navbar-link:hover {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.navbar-link-active {
+  color: var(--text-primary);
+}
+.navbar-link-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -21px;
+  height: 2px;
+  background: var(--indigo);
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.navbar-record-btn {
+  font-size: 13px;
+  padding: 8px 14px;
+}
+
+.navbar-record-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--ink-bg);
+  display: inline-block;
+}
+
+/* ---------- user menu ---------- */
+
+.navbar-user {
+  position: relative;
+}
+
+.navbar-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: var(--ink-surface-2);
+  border: 1px solid var(--ink-border);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.navbar-avatar:hover { border-color: var(--indigo-border); }
+
+.navbar-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 180px;
+  background: var(--ink-surface);
+  border: 1px solid var(--ink-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+}
+
+.navbar-menu-name {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--ink-border);
+  margin-bottom: var(--space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navbar-menu-item {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.navbar-menu-item:hover { background: var(--ink-surface-2); }
+
+/* ---------- mobile ---------- */
+@media (max-width: 640px) {
+  .navbar-inner { padding: 0 var(--space-4); gap: var(--space-4); }
+  .navbar-logo { font-size: 15px; }
+  .navbar-links { gap: var(--space-4); }
+  .navbar-record-btn span:not(.navbar-record-dot) { display: none; }
+}

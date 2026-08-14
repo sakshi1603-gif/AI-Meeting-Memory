@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import AppLayout from "./components/AppLayout";
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import MeetingList from "./pages/MeetingList";
 import MeetingDetail from "./pages/MeetingDetail";
 import Recorder from "./pages/Recorder";
+import SearchPage from "./pages/SearchPage";
 import "./App.css";
 
 function App() {
@@ -17,9 +19,12 @@ function App() {
           <Route path="/signup" element={<SignupPage />} />
 
           <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<MeetingList />} />
-            <Route path="/meetings/:id" element={<MeetingDetail />} />
-            <Route path="/record" element={<Recorder />} />
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<MeetingList />} />
+              <Route path="/meetings/:id" element={<MeetingDetail />} />
+              <Route path="/record" element={<Recorder />} />
+              <Route path="/search" element={<SearchPage />} />
+            </Route>
           </Route>
         </Routes>
       </AuthProvider>
