@@ -16,7 +16,6 @@ export default function Recorder() {
   const meetingIdRef = useRef<string | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
-  // socket listeners — wired exactly to recordingHandler.ts's emit names
   useEffect(() => {
     function onMeetingStarted({ meetingId }: { meetingId: string }) {
       meetingIdRef.current = meetingId;

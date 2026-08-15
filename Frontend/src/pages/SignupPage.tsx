@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import './LoginPage.css';
 
 export function SignupPage() {
   const { signup, error, clearError } = useAuth();
@@ -24,13 +25,13 @@ export function SignupPage() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <h1 style={styles.heading}>Create your account</h1>
-        <p style={styles.subheading}>Start capturing what your meetings decide</p>
+    <div className="auth-page">
+      <div className="auth-card">
+        <h1 className="auth-heading">Create your account</h1>
+        <p className="auth-subheading">Start capturing what your meetings decide</p>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <label style={styles.label} htmlFor="name">
+        <form onSubmit={handleSubmit} className="auth-form">
+          <label className="auth-label" htmlFor="name">
             Name
           </label>
           <input
@@ -43,10 +44,10 @@ export function SignupPage() {
               setName(e.target.value);
               if (error) clearError();
             }}
-            style={styles.input}
+            className="auth-input"
           />
 
-          <label style={styles.label} htmlFor="email">
+          <label className="auth-label" htmlFor="email">
             Email
           </label>
           <input
@@ -59,10 +60,10 @@ export function SignupPage() {
               setEmail(e.target.value);
               if (error) clearError();
             }}
-            style={styles.input}
+            className="auth-input"
           />
 
-          <label style={styles.label} htmlFor="password">
+          <label className="auth-label" htmlFor="password">
             Password
           </label>
           <input
@@ -76,19 +77,19 @@ export function SignupPage() {
               setPassword(e.target.value);
               if (error) clearError();
             }}
-            style={styles.input}
+            className="auth-input"
           />
 
-          {error && <p style={styles.error}>{error}</p>}
+          {error && <p className="auth-error">{error}</p>}
 
-          <button type="submit" disabled={submitting} style={styles.button}>
+          <button type="submit" disabled={submitting} className="auth-button">
             {submitting ? 'Creating account…' : 'Create account'}
           </button>
         </form>
 
-        <p style={styles.footer}>
+        <p className="auth-footer">
           Already have an account?{' '}
-          <Link to="/login" style={styles.link}>
+          <Link to="/login" className="auth-link">
             Sign in
           </Link>
         </p>
@@ -96,83 +97,3 @@ export function SignupPage() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'var(--ink-bg)',
-    fontFamily: 'var(--font-sans)',
-    padding: '1.5rem',
-  },
-  card: {
-    width: '100%',
-    maxWidth: 360,
-    background: 'var(--ink-surface)',
-    border: '1px solid var(--ink-border)',
-    borderRadius: 12,
-    padding: '2rem',
-  },
-  heading: {
-    fontFamily: 'var(--font-display)',
-    fontSize: '1.75rem',
-    color: 'var(--text-primary)',
-    margin: '0 0 0.35rem',
-  },
-  subheading: {
-    fontSize: '0.9rem',
-    color: 'var(--text-secondary)',
-    margin: '0 0 1.75rem',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.4rem',
-  },
-  label: {
-    fontSize: '0.8rem',
-    color: 'var(--text-secondary)',
-    marginTop: '0.75rem',
-  },
-  input: {
-    background: 'var(--ink-surface-2)',
-    border: '1px solid var(--ink-border)',
-    borderRadius: 8,
-    padding: '0.65rem 0.75rem',
-    color: 'var(--text-primary)',
-    fontSize: '0.95rem',
-    fontFamily: 'var(--font-sans)',
-    outline: 'none',
-  },
-  error: {
-    color: 'var(--danger)',
-    background: 'var(--danger-dim)',
-    borderRadius: 8,
-    padding: '0.6rem 0.75rem',
-    fontSize: '0.85rem',
-    margin: '0.5rem 0 0',
-  },
-  button: {
-    marginTop: '1.25rem',
-    background: 'var(--indigo)',
-    color: 'var(--ink-bg)',
-    border: 'none',
-    borderRadius: 8,
-    padding: '0.7rem',
-    fontSize: '0.95rem',
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
-  footer: {
-    marginTop: '1.5rem',
-    fontSize: '0.85rem',
-    color: 'var(--text-secondary)',
-    textAlign: 'center',
-  },
-  link: {
-    color: 'var(--indigo)',
-    textDecoration: 'none',
-  },
-};
