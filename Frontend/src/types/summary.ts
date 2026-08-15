@@ -29,5 +29,5 @@ export interface QueryResponse {
   answer: string;
   citations: unknown[];
   confidence: QueryConfidence;
-  sources: QuerySource[];
+  sources?: QuerySource[]; // absent when the "no relevant chunks found" branch fires
 }

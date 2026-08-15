@@ -1,14 +1,21 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { Meeting } from '../models';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // GET /api/meetings - list view (lighter payload, no rawTranscript)
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const meetings = await Meeting.find({})
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const meetings = await Meeting.find({ userId })
       .select('title status startedAt endedAt durationSeconds participants summary keyTopics createdAt')
-      .sort({ createdAt: -1 }); // newest meeting appears first 
+      .sort({ createdAt: -1 }); // newest meeting appears first
     res.json(meetings);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -16,10 +23,18 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/meetings/:id - full detail
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const meeting = await Meeting.findById(req.params.id);
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const meeting = await Meeting.findOne({ _id: req.params.id, userId });
     if (!meeting) {
+      // same response whether it doesn't exist or belongs to someone else —
+      // don't leak which one it is
       res.status(404).json({ error: 'Meeting not found' });
       return;
     }

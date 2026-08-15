@@ -8,6 +8,12 @@ const actionItemSchema = new mongoose.Schema({
 }, { _id: true });
 
 const meetingSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
   title: {
     type: String,
     required: true,
@@ -36,6 +42,7 @@ const meetingSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 meetingSchema.index({ createdAt: -1 });
+meetingSchema.index({ userId: 1, createdAt: -1 }); // this is the query your list route actually runs
 
 const Meeting = mongoose.model('Meeting', meetingSchema);
 

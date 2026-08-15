@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IMemoryChunk extends Document {
   meetingId: Types.ObjectId;
+  userId: Types.ObjectId;
   content: string;
   chunkIndex: number;
   embedding: number[];
@@ -17,6 +18,12 @@ const memoryChunkSchema = new Schema<IMemoryChunk>(
     meetingId: {
       type: Schema.Types.ObjectId,
       ref: 'Meeting',
+      required: true,
+      index: true
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
       required: true,
       index: true
     },
@@ -38,6 +45,7 @@ const memoryChunkSchema = new Schema<IMemoryChunk>(
 );
 
 memoryChunkSchema.index({ meetingId: 1, chunkIndex: 1 });
+memoryChunkSchema.index({ userId: 1 });
 
 const MemoryChunk = mongoose.model<IMemoryChunk>('MemoryChunk', memoryChunkSchema);
 

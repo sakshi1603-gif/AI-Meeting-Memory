@@ -16,7 +16,7 @@ export function SignupPage() {
     setSubmitting(true);
     try {
       await signup(name, email, password);
-      navigate('/meetings', { replace: true });
+      navigate('/', { replace: true });
     } catch {
     } finally {
       setSubmitting(false);

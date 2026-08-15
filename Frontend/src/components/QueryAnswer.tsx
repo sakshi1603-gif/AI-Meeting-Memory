@@ -34,7 +34,7 @@ export default function QueryAnswer({ question, result, loading, error }: QueryA
         <div className="query-answer-card">
           <p className="query-answer-text">{result.answer}</p>
 
-          {result.sources.length > 0 && (
+          {result.sources && result.sources.length > 0 && (
             <div className="query-answer-sources">
               {result.sources.map((s) => (
                 <span key={s.meetingId} className="query-answer-pill text-mono">

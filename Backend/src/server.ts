@@ -3,6 +3,7 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
+import jwt from "jsonwebtoken";
 
 import { connectMongo } from "./config/mongo.service";
 import { registerRecordingHandlers } from "./sockets/recordingHandler";
@@ -28,8 +29,25 @@ const io = new Server(server, {
   },
 });
 
+// reject any socket connection that doesn't carry a valid JWT — same secret
+// and payload shape as middleware/auth.ts, so a token valid for the REST API
+// is valid here too
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    return next(new Error("Unauthorized"));
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+    socket.data.userId = decoded.userId;
+    next();
+  } catch {
+    next(new Error("Unauthorized"));
+  }
+});
+
 io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+  console.log("Client connected:", socket.id, "user:", socket.data.userId);
   registerRecordingHandlers(io, socket);
 });
 

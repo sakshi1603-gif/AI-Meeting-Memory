@@ -7,6 +7,8 @@ import {
 } from "../services/memory.service";
 
 export const registerRecordingHandlers = (io: Server, socket: Socket) => {
+  const userId = socket.data.userId as string | undefined;
+
   let dgConnection: any = null;
   let isDgOpen = false;
   let pendingChunks: Buffer[] = [];
@@ -14,7 +16,14 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
 
   socket.on("start-recording", async () => {
     if (dgConnection) return;
+
+    if (!userId) {
+      socket.emit("meeting-save-error", { message: "Unauthorized" });
+      return;
+    }
+
     const meeting = await Meeting.create({
+      userId,
       title: "Untitled Meeting",
       status: "active",
       startedAt: new Date(),
@@ -115,7 +124,7 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
 
   socket.on("end-meeting", async () => {
     try {
-      if (!meetingId) return;
+      if (!meetingId || !userId) return;
 
       const chunks = await TranscriptChunk.find({ meetingId })
         .sort({ startTime: 1 })
@@ -123,7 +132,8 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
 
       const rawTranscript = chunks.map((c: any) => c.text).join(" ");
 
-      const meeting = await Meeting.findById(meetingId);
+      // scoped by userId too — belt and suspenders against a forged meetingId
+      const meeting = await Meeting.findOne({ _id: meetingId, userId });
 
       const endedAt = new Date();
 
@@ -131,8 +141,8 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
         ? Math.floor((endedAt.getTime() - meeting.startedAt.getTime()) / 1000)
         : 0;
 
-      await Meeting.findByIdAndUpdate(
-        meetingId,
+      await Meeting.findOneAndUpdate(
+        { _id: meetingId, userId },
         {
           status: "ended",
           endedAt,
@@ -166,7 +176,7 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
           rawTranscript,
         );
 
-        await embedMeeting(summarizedMeetingId);
+        await embedMeeting(summarizedMeetingId, userId);
 
         socket.emit("summary-ready", {
           meetingId: summarizedMeetingId,

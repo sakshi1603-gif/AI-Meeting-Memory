@@ -23,7 +23,7 @@ export async function generateAndSaveMemory(meetingId: string, rawTranscript: st
 }
 
 
-export async function embedMeeting(meetingId: string): Promise<void> {
+export async function embedMeeting(meetingId: string, userId: string): Promise<void> {
   const transcriptDocs = await TranscriptChunk.find({ meetingId }).sort({ startTime: 1 }).lean();
   if (transcriptDocs.length === 0) return;
 
@@ -46,6 +46,7 @@ export async function embedMeeting(meetingId: string): Promise<void> {
 
   const docs = chunks.map((chunk, i) => ({
     meetingId,
+    userId,
     content: chunk.content,
     chunkIndex: i,
     embedding: embeddings[i],
