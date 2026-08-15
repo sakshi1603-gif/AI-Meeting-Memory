@@ -45,7 +45,6 @@ const memoryChunkSchema = new Schema<IMemoryChunk>(
 );
 
 memoryChunkSchema.index({ meetingId: 1, chunkIndex: 1 });
-memoryChunkSchema.index({ userId: 1 });
 
 const MemoryChunk = mongoose.model<IMemoryChunk>('MemoryChunk', memoryChunkSchema);
 

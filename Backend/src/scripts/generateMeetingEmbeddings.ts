@@ -12,19 +12,27 @@ async function main(): Promise<void> {
     console.log('[embed] Connected to MongoDB.');
     const meetingIdArg = process.argv.find((a) => a.startsWith('--meetingId='))?.split('=')[1];
 
-    let meetingIds: string[];
+    // need userId alongside _id now — embedMeeting requires it
+    let meetings: { _id: any; userId: any }[];
     if (meetingIdArg) {
-      meetingIds = [meetingIdArg];
+      const m = await Meeting.findById(meetingIdArg, { _id: 1, userId: 1 }).lean();
+      meetings = m ? [m as any] : [];
     } else {
-      const meetings = await Meeting.find({}, { _id: 1 }).lean();
-      meetingIds = meetings.map((m: any) => m._id.toString());
+      meetings = await Meeting.find({}, { _id: 1, userId: 1 }).lean() as any[];
     }
 
-    console.log(`[embed] Found ${meetingIds.length} meeting(s) to process.`);
+    console.log(`[embed] Found ${meetings.length} meeting(s) to process.`);
 
-    for (const id of meetingIds) {
+    for (const m of meetings) {
+      const id = m._id.toString();
+
+      if (!m.userId) {
+        console.warn(`[embed] Skipping meeting ${id} — no userId on the meeting itself (pre-fix data).`);
+        continue;
+      }
+
       console.log(`[embed] Processing meeting ${id}...`);
-      await embedMeeting(id);
+      await embedMeeting(id, m.userId.toString());
       console.log(`[embed] Done with meeting ${id}.`);
     }
   } catch (err) {
