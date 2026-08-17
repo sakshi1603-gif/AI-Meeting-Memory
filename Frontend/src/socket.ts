@@ -1,8 +1,7 @@
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000", {
+const socket = io(import.meta.env.VITE_API_BASE_URL, {
   auth: (cb) => {
-    // read fresh from localStorage on every (re)connection attempt, not just once
     cb({ token: localStorage.getItem("amm_token") });
   },
 });
