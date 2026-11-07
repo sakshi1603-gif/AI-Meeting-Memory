@@ -14,6 +14,94 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
   let pendingChunks: Buffer[] = [];
   let meetingId: string | null = null;
 
+  // Shared by "end-meeting" (user clicked end) and "disconnect"
+  // (refresh / tab closed / network drop).
+  const finalizeMeeting = async (userEnded: boolean) => {
+    const currentMeetingId = meetingId;
+    if (!currentMeetingId || !userId) return;
+    meetingId = null; // claim immediately: a second trigger returns above
+    pendingChunks = [];
+
+    const emit = (event: string, payload?: unknown) => {
+      if (userEnded) socket.emit(event, payload);
+    };
+
+    try {
+      const chunks = await TranscriptChunk.find({ meetingId: currentMeetingId })
+        .sort({ startTime: 1 })
+        .lean();
+
+      const rawTranscript = chunks.map((c: any) => c.text).join(" ");
+
+      // Dropped before anything was transcribed: don't leave an empty meeting behind
+      if (!userEnded && rawTranscript.trim().length === 0) {
+        await Meeting.deleteOne({ _id: currentMeetingId, userId });
+        return;
+      }
+
+      const meeting = await Meeting.findOne({ _id: currentMeetingId, userId });
+      const endedAt = new Date();
+      const durationSeconds = meeting?.startedAt
+        ? Math.floor((endedAt.getTime() - meeting.startedAt.getTime()) / 1000)
+        : 0;
+
+      await Meeting.findOneAndUpdate(
+        { _id: currentMeetingId, userId },
+        { status: "ended", endedAt, durationSeconds, rawTranscript },
+        { new: true },
+      );
+
+      emit("meeting-saved", {
+        meetingId: currentMeetingId,
+        transcriptLength: rawTranscript.length,
+      });
+
+      if (rawTranscript.trim().length === 0) {
+        emit("summary-error", {
+          message: "No transcript captured — nothing to summarize.",
+        });
+        return;
+      }
+
+      emit("processing-started");
+
+      // summary and embeddings are independent: one failing must not block the other
+      const t0 = Date.now();
+      const [summaryRes, embedRes] = await Promise.allSettled([
+        (async () => {
+          const s = await generateAndSaveMemory(currentMeetingId, rawTranscript);
+          console.log(`[timing] summary ms: ${Date.now() - t0}`);
+          return s;
+        })(),
+        (async () => {
+          await embedMeeting(currentMeetingId, userId);
+          console.log(`[timing] embed ms: ${Date.now() - t0}`);
+        })(),
+      ]);
+      console.log(`[timing] pipeline total ms: ${Date.now() - t0}`);
+
+      if (embedRes.status === "rejected") {
+        console.error("Embedding failed:", embedRes.reason);
+      }
+
+      if (summaryRes.status === "fulfilled") {
+        emit("summary-ready", {
+          meetingId: currentMeetingId,
+          ...summaryRes.value,
+        });
+      } else {
+        console.error("Summarization failed after retries:", summaryRes.reason);
+        emit("summary-error", {
+          message:
+            "Summary failed after retries. The transcript is saved and still searchable.",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to finalize meeting:", err);
+      emit("meeting-save-error", { message: (err as Error).message });
+    }
+  };
+
   socket.on("start-recording", async () => {
     if (dgConnection) return;
 
@@ -122,79 +210,8 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
     isDgOpen = false;
   });
 
-  socket.on("end-meeting", async () => {
-    try {
-      if (!meetingId || !userId) return;
-
-      const chunks = await TranscriptChunk.find({ meetingId })
-        .sort({ startTime: 1 })
-        .lean();
-
-      const rawTranscript = chunks.map((c: any) => c.text).join(" ");
-
-      // scoped by userId too — belt and suspenders against a forged meetingId
-      const meeting = await Meeting.findOne({ _id: meetingId, userId });
-
-      const endedAt = new Date();
-
-      const durationSeconds = meeting?.startedAt
-        ? Math.floor((endedAt.getTime() - meeting.startedAt.getTime()) / 1000)
-        : 0;
-
-      await Meeting.findOneAndUpdate(
-        { _id: meetingId, userId },
-        {
-          status: "ended",
-          endedAt,
-          durationSeconds,
-          rawTranscript,
-        },
-        { new: true },
-      );
-
-      socket.emit("meeting-saved", {
-        meetingId,
-        transcriptLength: rawTranscript.length,
-      });
-
-      const summarizedMeetingId = meetingId;
-      meetingId = null;
-      pendingChunks = [];
-
-      if (rawTranscript.trim().length === 0) {
-        socket.emit("summary-error", {
-          message: "No transcript captured — nothing to summarize.",
-        });
-        return;
-      }
-
-      socket.emit("processing-started");
-
-      try {
-        const structured = await generateAndSaveMemory(
-          summarizedMeetingId,
-          rawTranscript,
-        );
-
-        await embedMeeting(summarizedMeetingId, userId);
-
-        socket.emit("summary-ready", {
-          meetingId: summarizedMeetingId,
-          ...structured,
-        });
-      } catch (summaryErr) {
-        console.error("Summarization failed:", summaryErr);
-        socket.emit("summary-error", {
-          message: "Failed to generate summary.",
-        });
-      }
-    } catch (err) {
-      console.error("Failed to finalize meeting:", err);
-
-      socket.emit("meeting-save-error", {
-        message: (err as Error).message,
-      });
-    }
+  socket.on("end-meeting", () => {
+    void finalizeMeeting(true);
   });
 
   socket.on("disconnect", () => {
@@ -204,5 +221,6 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
     }
     dgConnection = null;
     isDgOpen = false;
+    void finalizeMeeting(false); // recovers or cleans up a meeting left open by a refresh
   });
 };
