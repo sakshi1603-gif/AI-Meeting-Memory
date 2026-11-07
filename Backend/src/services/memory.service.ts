@@ -3,25 +3,37 @@ import { Meeting, TranscriptChunk, MemoryChunk } from "../models/index";
 import { chunkTranscript } from '../utils/transcriptChunker.util';
 import { generateEmbeddings } from './embedding.service';
 
+// "Monday" or garbage -> null, so the UI never shows "Invalid Date"
+function normalizeDueDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const t = Date.parse(value);
+  return Number.isNaN(t) ? null : new Date(t).toISOString();
+}
 
 export async function generateAndSaveMemory(meetingId: string, rawTranscript: string) {
   const structured = await extractStructuredSummary(rawTranscript);
 
+  const actionItems = structured.actionItems.map((item) => ({
+    text: item.task,
+    owner: item.owner,
+    dueDate: normalizeDueDate(item.dueDate),
+    done: false,
+  }));
+
   await Meeting.findByIdAndUpdate(meetingId, {
     summary: structured.summary,
     keyDecisions: structured.keyDecisions,
-    actionItems: structured.actionItems.map((item) => ({
-      text: item.task,       
-      owner: item.owner,
-      dueDate: item.dueDate,
-      done: false,
-    })),
-    memoryIndexed: true,
+    actionItems,
   });
 
-  return structured;
+  return {
+    ...structured,
+    actionItems: structured.actionItems.map((item, i) => ({
+      ...item,
+      dueDate: actionItems[i].dueDate,
+    })),
+  };
 }
-
 
 export async function embedMeeting(meetingId: string, userId: string): Promise<void> {
   const transcriptDocs = await TranscriptChunk.find({ meetingId }).sort({ startTime: 1 }).lean();
@@ -31,7 +43,7 @@ export async function embedMeeting(meetingId: string, userId: string): Promise<v
     text: d.text,
     speaker: d.speaker,
     startTime: d.startTime ?? 0,
-    endTime: d.endTime ?? 0
+    endTime: d.endTime ?? 0,
   }));
 
   const chunks = chunkTranscript(segments);
@@ -50,8 +62,11 @@ export async function embedMeeting(meetingId: string, userId: string): Promise<v
     content: chunk.content,
     chunkIndex: i,
     embedding: embeddings[i],
-    metadata: { speakers: chunk.speakers, startTime: chunk.startTime, endTime: chunk.endTime }
+    metadata: { speakers: chunk.speakers, startTime: chunk.startTime, endTime: chunk.endTime },
   }));
 
   await MemoryChunk.insertMany(docs);
+
+  // only mark indexed once chunks actually exist
+  await Meeting.findByIdAndUpdate(meetingId, { memoryIndexed: true });
 }
