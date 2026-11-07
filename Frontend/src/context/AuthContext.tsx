@@ -1,13 +1,12 @@
-import {  useContext, useEffect, useState } from 'react';
-import { authApi} from '../api/api';
-import type { AuthUser } from '../api/api';
-import { createContext } from 'react';
+import { useContext, useEffect, useState, createContext } from 'react';
 import type { ReactNode } from 'react';
-import { AxiosError } from 'axios';
+import axios from 'axios';
+import { authApi } from '../api/api';
+import type { AuthUser } from '../api/api';
 
 interface AuthContextValue {
   user: AuthUser | null;
-  loading: boolean; 
+  loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
@@ -16,6 +15,17 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    if (!err.response) {
+      return 'Cannot reach the server. It may be waking up, please try again in a few seconds.';
+    }
+    const data = err.response.data;
+    return data?.error ?? data?.message ?? fallback;
+  }
+  return fallback;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -50,9 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('amm_user', JSON.stringify(user));
       setUser(user);
     } catch (err) {
-      const message =
-        err instanceof AxiosError ? err.response?.data?.message ?? 'Login failed' : 'Login failed';
-      setError(message);
+      setError(getErrorMessage(err, 'Login failed'));
       throw err;
     }
   }
@@ -65,9 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('amm_user', JSON.stringify(user));
       setUser(user);
     } catch (err) {
-      const message =
-        err instanceof AxiosError ? err.response?.data?.message ?? 'Signup failed' : 'Signup failed';
-      setError(message);
+      setError(getErrorMessage(err, 'Signup failed'));
       throw err;
     }
   }

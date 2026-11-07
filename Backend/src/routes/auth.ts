@@ -5,11 +5,13 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-
 router.post('/signup', async (req: Request, res: Response) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid input', details: parsed.error.issues });
+    return res.status(400).json({
+      error: parsed.error.issues[0]?.message ?? 'Invalid input',
+      details: parsed.error.issues,
+    });
   }
 
   const { name, email, password } = parsed.data;
@@ -29,7 +31,10 @@ router.post('/signup', async (req: Request, res: Response) => {
 router.post('/login', async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: 'Invalid input', details: parsed.error.issues });
+    return res.status(400).json({
+      error: parsed.error.issues[0]?.message ?? 'Invalid input',
+      details: parsed.error.issues,
+    });
   }
 
   const { email, password } = parsed.data;
@@ -62,4 +67,5 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
   res.json({ message: 'Logged out successfully' });
 });
+
 export default router;
