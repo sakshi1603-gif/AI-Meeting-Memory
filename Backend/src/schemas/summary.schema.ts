@@ -7,6 +7,7 @@ export const ActionItemSchema = z.object({
 });
 
 export const MeetingSummarySchema = z.object({
+  title: z.string(),
   summary: z.string(),
   keyDecisions: z.array(z.string()),
   actionItems: z.array(ActionItemSchema),

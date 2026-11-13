@@ -69,7 +69,10 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
       const t0 = Date.now();
       const [summaryRes, embedRes] = await Promise.allSettled([
         (async () => {
-          const s = await generateAndSaveMemory(currentMeetingId, rawTranscript);
+          const s = await generateAndSaveMemory(
+            currentMeetingId,
+            rawTranscript,
+          );
           console.log(`[timing] summary ms: ${Date.now() - t0}`);
           return s;
         })(),
@@ -191,13 +194,16 @@ export const registerRecordingHandlers = (io: Server, socket: Socket) => {
   socket.on("audio-chunk", (chunk) => {
     const buffer = Buffer.from(chunk);
 
+    console.log("Audio chunk received:", buffer.length, "bytes");
+
     if (dgConnection && isDgOpen) {
       try {
-        dgConnection.socket.send(buffer);
-      } catch (e) {
-        console.error("send threw:", e);
+        dgConnection.sendMedia(buffer);
+      } catch (err) {
+        console.error("Failed to send audio:", err);
+        pendingChunks.push(buffer);
       }
-    } else if (dgConnection) {
+    } else {
       pendingChunks.push(buffer);
     }
   });

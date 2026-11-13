@@ -1,25 +1,38 @@
-import { GoogleGenAI, Type } from '@google/genai';
-import { MeetingSummarySchema, MeetingSummary } from '../schemas/summary.schema';
-import { answerSchema, QueryAnswer } from '../schemas/queryAnswer.schema';
+
+import { GoogleGenAI, Type } from "@google/genai";
+import {
+  MeetingSummarySchema,
+  MeetingSummary,
+} from "../schemas/summary.schema";
+import { answerSchema, QueryAnswer } from "../schemas/queryAnswer.schema";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const PRIMARY_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite';
-const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-2.5-flash';
+const PRIMARY_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite";
+const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL ?? "gemini-2.5-flash";
 const MAX_ATTEMPTS = 3;
 
-// counters for resume numbers (log or expose later)
-export const geminiStats = { calls: 0, retries: 0, fallbacks: 0, failures: 0 };
+// Counters for monitoring Gemini usage
+export const geminiStats = {
+  calls: 0,
+  retries: 0,
+  fallbacks: 0,
+  failures: 0,
+};
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function isRetryable(err: any): boolean {
   const status = err?.status ?? err?.code;
   return status === 429 || status === 500 || status === 503 || status === 504;
 }
 
-async function generateJSON(prompt: string, schema: object): Promise<string> {
+async function generateJSON(
+  prompt: string,
+  schema: object,
+): Promise<string> {
   geminiStats.calls++;
+
   let lastErr: unknown;
 
   for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
@@ -27,26 +40,34 @@ async function generateJSON(prompt: string, schema: object): Promise<string> {
       try {
         const response = await ai.models.generateContent({
           model,
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
           config: {
-            responseMimeType: 'application/json',
+            responseMimeType: "application/json",
             responseSchema: schema as any,
           },
         });
-        return response.text ?? '';
+
+        return response.text ?? "";
       } catch (err) {
         lastErr = err;
-        if (!isRetryable(err)) throw err;
+
+        if (!isRetryable(err)) {
+          geminiStats.failures++;
+          throw err;
+        }
 
         geminiStats.retries++;
+
         console.warn(
           `Gemini ${model} attempt ${attempt}/${MAX_ATTEMPTS} failed (${(err as any)?.status})`,
         );
+
         if (attempt < MAX_ATTEMPTS) {
           await sleep(1000 * 2 ** (attempt - 1) + Math.random() * 300);
         }
       }
     }
+
     if (model === PRIMARY_MODEL) {
       geminiStats.fallbacks++;
       console.warn(`Primary model exhausted, switching to ${FALLBACK_MODEL}`);
@@ -57,21 +78,53 @@ async function generateJSON(prompt: string, schema: object): Promise<string> {
   throw lastErr;
 }
 
+// Meeting summary and title generation prompt
 const SYSTEM_PROMPT = `You are extracting structured meeting notes from a transcript.
-Rules:
-- Only include decisions that were explicitly agreed on, not things merely discussed.
-- Only include action items that have a clear task. If no owner was stated, use "unassigned".
-- Do not invent details not present in the transcript.
-- dueDate must be an ISO date (YYYY-MM-DD). Resolve relative phrases like "Monday" or "next week" using today's date. Use null if no due date was stated.
-- If the transcript is too short or off-topic to extract anything meaningful, return empty arrays and a one-line summary saying so.`;
 
+Rules:
+
+TITLE GENERATION:
+- Generate a meaningful meeting title of 3-8 words based on the main topic.
+- The title must accurately represent what was discussed.
+- Never use generic titles like "Meeting", "Discussion" or "Untitled Meeting".
+- Do not invent topics that are not supported by the transcript.
+- Use title case for the title.
+- If the transcript is too short or has no identifiable topic, use "General Discussion".
+
+SUMMARY:
+- Generate a concise summary covering the main points discussed.
+- Do not invent details not present in the transcript.
+- If the transcript is too short or off-topic, return a one-line summary explaining that.
+
+DECISIONS:
+- Only include decisions that were explicitly agreed on.
+- Do not include things that were merely discussed.
+
+ACTION ITEMS:
+- Only include action items that have a clear task.
+- If no owner was stated, use "unassigned".
+- Do not invent tasks, owners or deadlines.
+- dueDate must be an ISO date (YYYY-MM-DD).
+- Resolve relative phrases like "Monday" or "next week" using today's date.
+- Use null if no due date was stated.
+
+Return all fields according to the provided JSON schema.`;
+
+// Gemini structured response schema
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    summary: { type: Type.STRING },
+    title: {
+      type: Type.STRING,
+    },
+    summary: {
+      type: Type.STRING,
+    },
     keyDecisions: {
       type: Type.ARRAY,
-      items: { type: Type.STRING },
+      items: {
+        type: Type.STRING,
+      },
     },
     actionItems: {
       type: Type.ARRAY,
@@ -82,24 +135,29 @@ const RESPONSE_SCHEMA = {
           owner: { type: Type.STRING },
           dueDate: { type: Type.STRING, nullable: true },
         },
-        required: ['task', 'owner', 'dueDate'],
+        required: ["task", "owner", "dueDate"],
       },
     },
   },
-  required: ['summary', 'keyDecisions', 'actionItems'],
+  required: ["title", "summary", "keyDecisions", "actionItems"],
 };
 
+// RAG query prompt
 const QUERY_SYSTEM_PROMPT = `Answer using ONLY the excerpts provided. Each excerpt is tagged with meeting title, date, and timestamp.
+
 Rules:
 - Every claim must cite the excerpt's meeting title and timestamp — no exceptions.
 - If the excerpts don't answer the question, say so plainly and set confidence to "low". Do not guess.
 - If meetings conflict, note the disagreement and cite both.
 - Never invent a timestamp or meeting name not shown in the excerpts.`;
 
+// Gemini RAG response schema
 const QUERY_RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    answer: { type: Type.STRING },
+    answer: {
+      type: Type.STRING,
+    },
     citations: {
       type: Type.ARRAY,
       items: {
@@ -110,31 +168,61 @@ const QUERY_RESPONSE_SCHEMA = {
           timestamp: { type: Type.STRING },
           quote: { type: Type.STRING },
         },
-        required: ['meetingTitle', 'meetingId', 'timestamp', 'quote'],
+        required: ["meetingTitle", "meetingId", "timestamp", "quote"],
       },
     },
-    confidence: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
+    confidence: {
+      type: Type.STRING,
+      enum: ["high", "medium", "low"],
+    },
   },
-  required: ['answer', 'citations', 'confidence'],
+  required: ["answer", "citations", "confidence"],
 };
 
-export async function extractStructuredSummary(transcriptText: string): Promise<MeetingSummary> {
+// Extract structured meeting summary
+export async function extractStructuredSummary(
+  transcriptText: string,
+): Promise<MeetingSummary> {
   const today = new Date().toISOString().slice(0, 10);
-  const prompt = `${SYSTEM_PROMPT}\n\nToday's date: ${today}\n\nTranscript:\n${transcriptText}`;
+
+  const prompt = `${SYSTEM_PROMPT}
+
+Today's date: ${today}
+
+Transcript:
+${transcriptText}`;
+
   const raw = await generateJSON(prompt, RESPONSE_SCHEMA);
+
   return safeParseJSON(raw);
 }
 
-export function buildQueryPrompt(question: string, context: string): string {
-  return `${QUERY_SYSTEM_PROMPT}\n\nEXCERPTS:\n${context}\n\nQUESTION: ${question}`;
+// Build RAG query prompt
+export function buildQueryPrompt(
+  question: string,
+  context: string,
+): string {
+  return `${QUERY_SYSTEM_PROMPT}
+
+EXCERPTS:
+${context}
+
+QUESTION: ${question}`;
 }
 
-export async function answerQuery(question: string, context: string): Promise<QueryAnswer> {
+// Generate RAG answer
+export async function answerQuery(
+  question: string,
+  context: string,
+): Promise<QueryAnswer> {
   const prompt = buildQueryPrompt(question, context);
+
   const raw = await generateJSON(prompt, QUERY_RESPONSE_SCHEMA);
+
   return safeParseQueryJSON(raw);
 }
 
+// Safely parse Gemini meeting summary response
 function safeParseJSON(raw: string): MeetingSummary {
   let candidate: any;
 
@@ -142,6 +230,7 @@ function safeParseJSON(raw: string): MeetingSummary {
     candidate = JSON.parse(raw);
   } catch {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
+
     if (jsonMatch) {
       try {
         candidate = JSON.parse(jsonMatch[0]);
@@ -154,12 +243,20 @@ function safeParseJSON(raw: string): MeetingSummary {
   }
 
   const parsed = MeetingSummarySchema.safeParse(candidate);
-  if (parsed.success) return parsed.data;
 
-  console.warn('Schema validation failed:', parsed.error.issues);
+  if (parsed.success) {
+    return {
+      ...parsed.data,
+      title: parsed.data.title.trim() || "General Discussion",
+    };
+  }
+
+  console.warn("Schema validation failed:", parsed.error.issues);
+
   return coerceToSchema(candidate);
 }
 
+// Safely parse Gemini RAG response
 function safeParseQueryJSON(raw: string): QueryAnswer {
   let candidate: any;
 
@@ -167,6 +264,7 @@ function safeParseQueryJSON(raw: string): QueryAnswer {
     candidate = JSON.parse(raw);
   } catch {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
+
     if (jsonMatch) {
       try {
         candidate = JSON.parse(jsonMatch[0]);
@@ -179,59 +277,106 @@ function safeParseQueryJSON(raw: string): QueryAnswer {
   }
 
   const parsed = answerSchema.safeParse(candidate);
-  if (parsed.success) return parsed.data;
 
-  console.warn('Query schema validation failed:', parsed.error.issues);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  console.warn("Query schema validation failed:", parsed.error.issues);
+
   return coerceToQuerySchema(candidate);
 }
 
+// Meeting summary fallback
 function fallbackSummary(): MeetingSummary {
   return {
-    summary: 'Summary extraction failed — could not parse model output.',
+    title: "General Discussion",
+    summary: "Summary extraction failed — could not parse model output.",
     keyDecisions: [],
     actionItems: [],
   };
 }
 
+// RAG fallback
 function fallbackQueryAnswer(): QueryAnswer {
   return {
-    answer: 'Could not parse a response — please try rephrasing the question.',
+    answer: "Could not parse a response — please try rephrasing the question.",
     citations: [],
-    confidence: 'low',
+    confidence: "low",
   };
 }
 
+// Coerce meeting summary response into expected structure
 function coerceToSchema(raw: any): MeetingSummary {
   return {
-    summary: typeof raw?.summary === 'string' ? raw.summary : 'Summary unavailable.',
+    title:
+      typeof raw?.title === "string" && raw.title.trim().length > 0
+        ? raw.title.trim()
+        : "General Discussion",
+
+    summary:
+      typeof raw?.summary === "string"
+        ? raw.summary
+        : "Summary unavailable.",
+
     keyDecisions: Array.isArray(raw?.keyDecisions)
-      ? raw.keyDecisions.filter((d: unknown) => typeof d === 'string')
+      ? raw.keyDecisions.filter(
+          (decision: unknown) => typeof decision === "string",
+        )
       : [],
+
     actionItems: Array.isArray(raw?.actionItems)
       ? raw.actionItems
-          .filter((a: any) => a && typeof a.task === 'string')
-          .map((a: any) => ({
-            task: a.task,
-            owner: typeof a.owner === 'string' ? a.owner : 'unassigned',
-            dueDate: typeof a.dueDate === 'string' ? a.dueDate : null,
+          .filter(
+            (item: any) => item && typeof item.task === "string",
+          )
+          .map((item: any) => ({
+            task: item.task,
+            owner:
+              typeof item.owner === "string"
+                ? item.owner
+                : "unassigned",
+            dueDate:
+              typeof item.dueDate === "string"
+                ? item.dueDate
+                : null,
           }))
       : [],
   };
 }
 
+// Coerce RAG response into expected structure
 function coerceToQuerySchema(raw: any): QueryAnswer {
   return {
-    answer: typeof raw?.answer === 'string' ? raw.answer : 'Answer unavailable.',
+    answer:
+      typeof raw?.answer === "string"
+        ? raw.answer
+        : "Answer unavailable.",
+
     citations: Array.isArray(raw?.citations)
       ? raw.citations
-          .filter((c: any) => c && typeof c.meetingTitle === 'string' && typeof c.timestamp === 'string')
-          .map((c: any) => ({
-            meetingTitle: c.meetingTitle,
-            meetingId: typeof c.meetingId === 'string' ? c.meetingId : '',
-            timestamp: c.timestamp,
-            quote: typeof c.quote === 'string' ? c.quote : '',
+          .filter(
+            (citation: any) =>
+              citation &&
+              typeof citation.meetingTitle === "string" &&
+              typeof citation.timestamp === "string",
+          )
+          .map((citation: any) => ({
+            meetingTitle: citation.meetingTitle,
+            meetingId:
+              typeof citation.meetingId === "string"
+                ? citation.meetingId
+                : "",
+            timestamp: citation.timestamp,
+            quote:
+              typeof citation.quote === "string"
+                ? citation.quote
+                : "",
           }))
       : [],
-    confidence: ['high', 'medium', 'low'].includes(raw?.confidence) ? raw.confidence : 'low',
+
+    confidence: ["high", "medium", "low"].includes(raw?.confidence)
+      ? raw.confidence
+      : "low",
   };
 }

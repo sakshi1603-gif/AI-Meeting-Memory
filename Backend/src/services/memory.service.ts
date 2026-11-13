@@ -1,7 +1,7 @@
-import { extractStructuredSummary } from './summarization.service';
+import { extractStructuredSummary } from "./summarization.service";
 import { Meeting, TranscriptChunk, MemoryChunk } from "../models/index";
-import { chunkTranscript } from '../utils/transcriptChunker.util';
-import { generateEmbeddings } from './embedding.service';
+import { chunkTranscript } from "../utils/transcriptChunker.util";
+import { generateEmbeddings } from "./embedding.service";
 
 // "Monday" or garbage -> null, so the UI never shows "Invalid Date"
 function normalizeDueDate(value: string | null | undefined): string | null {
@@ -10,7 +10,10 @@ function normalizeDueDate(value: string | null | undefined): string | null {
   return Number.isNaN(t) ? null : new Date(t).toISOString();
 }
 
-export async function generateAndSaveMemory(meetingId: string, rawTranscript: string) {
+export async function generateAndSaveMemory(
+  meetingId: string,
+  rawTranscript: string,
+) {
   const structured = await extractStructuredSummary(rawTranscript);
 
   const actionItems = structured.actionItems.map((item) => ({
@@ -19,12 +22,14 @@ export async function generateAndSaveMemory(meetingId: string, rawTranscript: st
     dueDate: normalizeDueDate(item.dueDate),
     done: false,
   }));
-
   await Meeting.findByIdAndUpdate(meetingId, {
+    title: structured.title,
     summary: structured.summary,
     keyDecisions: structured.keyDecisions,
     actionItems,
   });
+
+  
 
   return {
     ...structured,
@@ -35,8 +40,13 @@ export async function generateAndSaveMemory(meetingId: string, rawTranscript: st
   };
 }
 
-export async function embedMeeting(meetingId: string, userId: string): Promise<void> {
-  const transcriptDocs = await TranscriptChunk.find({ meetingId }).sort({ startTime: 1 }).lean();
+export async function embedMeeting(
+  meetingId: string,
+  userId: string,
+): Promise<void> {
+  const transcriptDocs = await TranscriptChunk.find({ meetingId })
+    .sort({ startTime: 1 })
+    .lean();
   if (transcriptDocs.length === 0) return;
 
   const segments = transcriptDocs.map((d: any) => ({
@@ -62,7 +72,11 @@ export async function embedMeeting(meetingId: string, userId: string): Promise<v
     content: chunk.content,
     chunkIndex: i,
     embedding: embeddings[i],
-    metadata: { speakers: chunk.speakers, startTime: chunk.startTime, endTime: chunk.endTime },
+    metadata: {
+      speakers: chunk.speakers,
+      startTime: chunk.startTime,
+      endTime: chunk.endTime,
+    },
   }));
 
   await MemoryChunk.insertMany(docs);
