@@ -307,6 +307,7 @@ function fallbackQueryAnswer(): QueryAnswer {
 }
 
 // Coerce meeting summary response into expected structure
+// Coerce meeting summary response into expected structure
 function coerceToSchema(raw: any): MeetingSummary {
   return {
     title:
