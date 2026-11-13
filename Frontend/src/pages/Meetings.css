@@ -102,6 +102,27 @@
   border-radius: var(--radius-full);
   white-space: nowrap;
 }
+
+.meeting-card-content {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.meeting-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.meeting-delete-btn {
+  color: #dc4545;
+}
+
+.meeting-delete-btn:hover {
+  background: rgba(220, 69, 69, 0.1);
+}
+
 .meeting-status-ended {
   background: var(--indigo-dim);
   color: var(--indigo);

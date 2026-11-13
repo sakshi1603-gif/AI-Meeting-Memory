@@ -1,3 +1,4 @@
+
 import axios, { AxiosError } from 'axios';
 import type { Meeting, MeetingListItem } from '../types/meeting';
 import type { QueryResponse } from '../types/summary';
@@ -30,6 +31,7 @@ export interface AuthUser {
   name: string;
   email: string;
 }
+
 export interface AuthResponse {
   token: string;
   user: AuthUser;
@@ -55,27 +57,33 @@ export const authApi = {
     try {
       await api.post('/auth/logout');
     } catch {
-      // logout should never block the UI — token is cleared client-side regardless
+      // logout should never block the UI
     }
   },
 };
 
 export const meetingApi = {
-  // GET /api/meetings — list view, no rawTranscript
+  // GET /api/meetings
   getAll: async () => {
     const { data } = await api.get<MeetingListItem[]>('/meetings');
     return data;
   },
 
-  // GET /api/meetings/:id — full document
+  // GET /api/meetings/:id
   getById: async (id: string) => {
     const { data } = await api.get<Meeting>(`/meetings/${id}`);
+    return data;
+  },
+
+  // DELETE /api/meetings/:id
+  delete: async (id: string) => {
+    const { data } = await api.delete(`/meetings/${id}`);
     return data;
   },
 };
 
 export const queryApi = {
-  // POST /api/query — meetingId omitted = cross-meeting search, provided = scoped to one meeting
+  // POST /api/query
   ask: async (question: string, meetingId?: string) => {
     const { data } = await api.post<QueryResponse>('/query', { question, meetingId });
     return data;

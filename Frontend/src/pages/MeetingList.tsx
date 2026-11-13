@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { meetingApi } from '../api/api';
@@ -16,8 +17,10 @@ function formatDuration(seconds: number) {
   const mins = Math.round(seconds / 60);
   if (mins < 1) return '<1 min';
   if (mins < 60) return `${mins} min`;
+
   const h = Math.floor(mins / 60);
   const m = mins % 60;
+
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
@@ -31,6 +34,7 @@ const STATUS_LABEL: Record<MeetingListItem['status'], string> = {
 export default function MeetingList() {
   const [meetings, setMeetings] = useState<MeetingListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     meetingApi
@@ -38,6 +42,29 @@ export default function MeetingList() {
       .then(setMeetings)
       .catch(() => setError('Could not load your meetings.'));
   }, []);
+
+  async function handleDelete(id: string, title: string) {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${title}"?\n\nThis will permanently delete the meeting, transcript, and memory data.`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingId(id);
+    setError(null);
+
+    try {
+      await meetingApi.delete(id);
+
+      setMeetings((prev) =>
+        prev ? prev.filter((meeting) => meeting._id !== id) : prev
+      );
+    } catch {
+      setError('Could not delete the meeting. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="page-shell">
@@ -62,9 +89,14 @@ export default function MeetingList() {
         <div className="empty-state card">
           <h2>No meetings yet</h2>
           <p className="text-secondary">
-            Start a recording and it'll show up here — transcribed, summarized, and searchable.
+            Start a recording and it'll show up here — transcribed,
+            summarized, and searchable.
           </p>
-          <Link to="/record" className="btn btn-primary" style={{ marginTop: 'var(--space-4)' }}>
+          <Link
+            to="/record"
+            className="btn btn-primary"
+            style={{ marginTop: 'var(--space-4)' }}
+          >
             Start your first recording
           </Link>
         </div>
@@ -73,36 +105,55 @@ export default function MeetingList() {
       {meetings && meetings.length > 0 && (
         <div className="meeting-list">
           {meetings.map((m) => (
-            <Link to={`/meetings/${m._id}`} key={m._id} className="meeting-card card">
-              <div className="meeting-card-top">
-                <h3 className="meeting-card-title">{m.title}</h3>
-                <span className={`meeting-status meeting-status-${m.status}`}>
-                  {STATUS_LABEL[m.status]}
-                </span>
-              </div>
-
-              <p className="meeting-card-summary text-secondary">
-                {m.summary ?? 'Summary not ready yet.'}
-              </p>
-
-              {m.keyTopics.length > 0 && (
-                <div className="meeting-card-topics">
-                  {m.keyTopics.slice(0, 3).map((t) => (
-                    <span key={t} className="meeting-topic-pill text-mono">
-                      {t}
-                    </span>
-                  ))}
+            <div key={m._id} className="meeting-card card">
+              <Link
+                to={`/meetings/${m._id}`}
+                className="meeting-card-content"
+              >
+                <div className="meeting-card-top">
+                  <h3 className="meeting-card-title">{m.title}</h3>
+                  <span className={`meeting-status meeting-status-${m.status}`}>
+                    {STATUS_LABEL[m.status]}
+                  </span>
                 </div>
-              )}
 
-              <div className="meeting-card-meta text-faint text-mono">
-                <span>{formatDate(m.startedAt)}</span>
-                <span>·</span>
-                <span>{formatDuration(m.durationSeconds)}</span>
-                <span>·</span>
-                <span>{m.participants.length} participant{m.participants.length !== 1 ? 's' : ''}</span>
+                <p className="meeting-card-summary text-secondary">
+                  {m.summary ?? 'Summary not ready yet.'}
+                </p>
+
+                {m.keyTopics.length > 0 && (
+                  <div className="meeting-card-topics">
+                    {m.keyTopics.slice(0, 3).map((t) => (
+                      <span key={t} className="meeting-topic-pill text-mono">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="meeting-card-meta text-faint text-mono">
+                  <span>{formatDate(m.startedAt)}</span>
+                  <span>·</span>
+                  <span>{formatDuration(m.durationSeconds)}</span>
+                  <span>·</span>
+                  <span>
+                    {m.participants.length} participant
+                    {m.participants.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              </Link>
+
+              <div className="meeting-card-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost meeting-delete-btn"
+                  onClick={() => handleDelete(m._id, m.title)}
+                  disabled={deletingId === m._id}
+                >
+                  {deletingId === m._id ? 'Deleting...' : 'Delete'}
+                </button>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}
