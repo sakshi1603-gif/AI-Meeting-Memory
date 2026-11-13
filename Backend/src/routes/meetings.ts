@@ -1,8 +1,16 @@
 
 import { Router, Response } from 'express';
 import { isValidObjectId } from 'mongoose';
-import { Meeting, TranscriptChunk, MemoryChunk } from '../models';
+
+import {
+  Meeting,
+  TranscriptChunk,
+  MemoryChunk,
+} from '../models';
+
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+
+import { generateAndSaveMemory } from '../services/memory.service';
 
 const router = Router();
 
@@ -29,6 +37,100 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /api/meetings/:id/regenerate-summary
+router.post(
+  '/:id/regenerate-summary',
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      // Validate MongoDB ObjectId
+      if (!isValidObjectId(req.params.id)) {
+        res.status(400).json({ error: 'Invalid meeting ID' });
+        return;
+      }
+
+      // Verify meeting ownership
+      const meeting = await Meeting.findOne({
+        _id: req.params.id,
+        userId,
+      });
+
+      if (!meeting) {
+        res.status(404).json({ error: 'Meeting not found' });
+        return;
+      }
+
+      // Only ended or failed meetings can be regenerated
+      if (
+        meeting.status === 'active' ||
+        meeting.status === 'processing'
+      ) {
+        res.status(409).json({
+          error: 'Cannot regenerate summary while meeting is active or processing.',
+        });
+        return;
+      }
+
+      // Prefer the saved full transcript
+      let rawTranscript = meeting.rawTranscript?.trim() ?? '';
+
+      // Fallback: reconstruct transcript from transcript chunks
+      if (!rawTranscript) {
+        const transcriptChunks = await TranscriptChunk.find({
+          meetingId: meeting._id,
+        })
+          .sort({ startTime: 1 })
+          .lean();
+
+        rawTranscript = transcriptChunks
+          .map((chunk) => chunk.text)
+          .join(' ')
+          .trim();
+      }
+
+      if (!rawTranscript) {
+        res.status(400).json({
+          error: 'No transcript available. Cannot regenerate summary.',
+        });
+        return;
+      }
+
+      console.log(
+        `Regenerating summary for meeting: ${meeting._id}`,
+      );
+
+      // Reuse existing AI summarization service
+      const result = await generateAndSaveMemory(
+        meeting._id.toString(),
+        rawTranscript,
+      );
+
+      console.log(
+        `Summary regenerated for meeting: ${meeting._id}`,
+      );
+
+      res.status(200).json({
+        message: 'Summary regenerated successfully',
+        meetingId: meeting._id,
+        ...result,
+      });
+    } catch (err) {
+      console.error('Summary regeneration failed:', err);
+
+      res.status(500).json({
+        error: 'Failed to regenerate summary. Please try again.',
+      });
+    }
+  },
+);
+
 // DELETE /api/meetings/:id - atomically delete meeting and associated data
 router.delete(
   '/:id',
@@ -41,7 +143,6 @@ router.delete(
       return;
     }
 
-    // Validate MongoDB ObjectId
     if (!isValidObjectId(req.params.id)) {
       res.status(400).json({ error: 'Invalid meeting ID' });
       return;
@@ -53,7 +154,6 @@ router.delete(
       let meetingFound = false;
 
       await session.withTransaction(async () => {
-        // Verify meeting ownership inside the transaction
         const meeting = await Meeting.findOne({
           _id: req.params.id,
           userId,
@@ -67,18 +167,15 @@ router.delete(
 
         const meetingId = meeting._id;
 
-        // Delete all transcript chunks
         await TranscriptChunk.deleteMany({
           meetingId,
         }).session(session);
 
-        // Delete all memory chunks belonging to this user and meeting
         await MemoryChunk.deleteMany({
           meetingId,
           userId,
         }).session(session);
 
-        // Delete the parent meeting document
         const result = await Meeting.deleteOne({
           _id: meetingId,
           userId,
@@ -107,7 +204,7 @@ router.delete(
     } finally {
       await session.endSession();
     }
-  }
+  },
 );
 
 // GET /api/meetings/:id - full detail
@@ -131,7 +228,6 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     });
 
     if (!meeting) {
-      // Same response whether missing or owned by someone else
       res.status(404).json({ error: 'Meeting not found' });
       return;
     }

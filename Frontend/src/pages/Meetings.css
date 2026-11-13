@@ -24,8 +24,13 @@
   padding: var(--space-8) var(--space-6);
   text-align: center;
 }
-.empty-state h2 { margin-bottom: var(--space-2); }
-.empty-state p { max-width: 380px; margin: 0 auto; }
+.empty-state h2 {
+  margin-bottom: var(--space-2);
+}
+.empty-state p {
+  max-width: 380px;
+  margin: 0 auto;
+}
 
 /* ---------- meeting list ---------- */
 .meeting-list {
@@ -38,8 +43,9 @@
   display: block;
   padding: var(--space-5);
   color: var(--text-primary);
-  transition: border-color var(--duration-fast) var(--ease-standard),
-              transform var(--duration-fast) var(--ease-standard);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 .meeting-card:hover {
   border-color: var(--indigo-border);
@@ -67,6 +73,7 @@
   margin-bottom: var(--space-3);
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -90,6 +97,14 @@
   display: flex;
   gap: var(--space-2);
   font-size: 12px;
+}
+
+.detail-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 /* ---------- status pills ---------- */
@@ -149,17 +164,30 @@
 }
 .meeting-card-skeleton {
   height: 108px;
-  background: linear-gradient(90deg, var(--ink-surface) 0%, var(--ink-surface-2) 50%, var(--ink-surface) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--ink-surface) 0%,
+    var(--ink-surface-2) 50%,
+    var(--ink-surface) 100%
+  );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .meeting-card-skeleton { animation: none; }
-  .meeting-status-active { animation: none; }
+  .meeting-card-skeleton {
+    animation: none;
+  }
+  .meeting-status-active {
+    animation: none;
+  }
 }
 
 .detail-back-link {
@@ -167,7 +195,9 @@
   font-size: 13px;
   margin-bottom: var(--space-4);
 }
-.detail-back-link:hover { color: var(--text-primary); }
+.detail-back-link:hover {
+  color: var(--text-primary);
+}
 
 .detail-header {
   display: flex;
@@ -187,7 +217,9 @@
   padding: var(--space-5);
   margin-bottom: var(--space-4);
 }
-.detail-section h2 { margin-bottom: var(--space-3); }
+.detail-section h2 {
+  margin-bottom: var(--space-3);
+}
 
 .detail-summary-text {
   font-size: 15px;
@@ -222,7 +254,10 @@
   border-bottom: 1px solid var(--ink-border);
   font-size: 14px;
 }
-.detail-action-list li:last-child { border-bottom: none; padding-bottom: 0; }
+.detail-action-list li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
 .detail-action-done .detail-action-text {
   color: var(--text-faint);
   text-decoration: line-through;
@@ -251,18 +286,29 @@
   font-size: 14px;
   color: var(--text-primary);
   outline: none;
-  transition: border-color var(--duration-fast) var(--ease-standard),
-              box-shadow var(--duration-fast) var(--ease-standard);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 .search-input-inline:focus {
   border-color: var(--indigo);
   box-shadow: var(--shadow-glow-indigo);
 }
-.search-input-inline::placeholder { color: var(--text-faint); }
+.search-input-inline::placeholder {
+  color: var(--text-faint);
+}
 
 /* ---------- mobile ---------- */
 @media (max-width: 640px) {
-  .page-shell { padding: var(--space-5) var(--space-4) var(--space-7); }
-  .page-header { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
-  .detail-ask-form { flex-direction: column; }
+  .page-shell {
+    padding: var(--space-5) var(--space-4) var(--space-7);
+  }
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+  .detail-ask-form {
+    flex-direction: column;
+  }
 }

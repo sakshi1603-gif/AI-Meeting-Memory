@@ -1,41 +1,101 @@
+
 import { extractStructuredSummary } from "./summarization.service";
-import { Meeting, TranscriptChunk, MemoryChunk } from "../models/index";
+import {
+  Meeting,
+  TranscriptChunk,
+  MemoryChunk,
+} from "../models/index";
 import { chunkTranscript } from "../utils/transcriptChunker.util";
 import { generateEmbeddings } from "./embedding.service";
 
-// "Monday" or garbage -> null, so the UI never shows "Invalid Date"
-function normalizeDueDate(value: string | null | undefined): string | null {
+// "Monday" or invalid date -> null
+function normalizeDueDate(
+  value: string | null | undefined,
+): string | null {
   if (!value) return null;
-  const t = Date.parse(value);
-  return Number.isNaN(t) ? null : new Date(t).toISOString();
+
+  const timestamp = Date.parse(value);
+
+  return Number.isNaN(timestamp)
+    ? null
+    : new Date(timestamp).toISOString();
 }
 
 export async function generateAndSaveMemory(
   meetingId: string,
   rawTranscript: string,
 ) {
+  if (!rawTranscript.trim()) {
+    throw new Error("Cannot generate summary from an empty transcript.");
+  }
+
+  // Generate structured summary using AI
   const structured = await extractStructuredSummary(rawTranscript);
 
-  const actionItems = structured.actionItems.map((item) => ({
-    text: item.task,
-    owner: item.owner,
-    dueDate: normalizeDueDate(item.dueDate),
-    done: false,
-  }));
-  await Meeting.findByIdAndUpdate(meetingId, {
-    title: structured.title,
-    summary: structured.summary,
-    keyDecisions: structured.keyDecisions,
-    actionItems,
+  // Validate AI response before saving
+  if (
+    !structured.summary?.trim() ||
+    /^summary (extraction failed|unavailable)/i.test(
+      structured.summary.trim(),
+    )
+  ) {
+    throw new Error(
+      "AI summary generation failed. Existing meeting summary was preserved.",
+    );
+  }
+
+  if (!structured.title?.trim()) {
+    throw new Error("AI did not generate a valid meeting title.");
+  }
+
+  // Fetch existing action items to preserve completed status
+  const existingMeeting = await Meeting.findById(meetingId)
+    .select("actionItems")
+    .lean();
+
+  const existingActionItems = existingMeeting?.actionItems ?? [];
+
+  const actionItems = structured.actionItems.map((item) => {
+    const existingItem = existingActionItems.find(
+      (existing: any) =>
+        existing.text.trim().toLowerCase() ===
+          item.task.trim().toLowerCase() &&
+        (existing.owner ?? "").trim().toLowerCase() ===
+          (item.owner ?? "").trim().toLowerCase(),
+    );
+
+    return {
+      text: item.task,
+      owner: item.owner,
+      dueDate: normalizeDueDate(item.dueDate),
+      done: existingItem?.done ?? false,
+    };
   });
 
-  
+  // Save only after successful AI response validation
+  const updatedMeeting = await Meeting.findByIdAndUpdate(
+    meetingId,
+    {
+      title: structured.title.trim(),
+      summary: structured.summary.trim(),
+      keyDecisions: structured.keyDecisions,
+      actionItems,
+    },
+    { new: true },
+  );
+
+  if (!updatedMeeting) {
+    throw new Error("Meeting not found while saving generated summary.");
+  }
 
   return {
     ...structured,
-    actionItems: structured.actionItems.map((item, i) => ({
+    title: structured.title.trim(),
+    summary: structured.summary.trim(),
+    actionItems: structured.actionItems.map((item, index) => ({
       ...item,
-      dueDate: actionItems[i].dueDate,
+      dueDate: actionItems[index].dueDate,
+      done: actionItems[index].done,
     })),
   };
 }
@@ -47,6 +107,7 @@ export async function embedMeeting(
   const transcriptDocs = await TranscriptChunk.find({ meetingId })
     .sort({ startTime: 1 })
     .lean();
+
   if (transcriptDocs.length === 0) return;
 
   const segments = transcriptDocs.map((d: any) => ({
@@ -57,21 +118,27 @@ export async function embedMeeting(
   }));
 
   const chunks = chunkTranscript(segments);
+
   if (chunks.length === 0) return;
 
-  const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
+  const embeddings = await generateEmbeddings(
+    chunks.map((chunk) => chunk.content),
+  );
+
   if (embeddings.length !== chunks.length) {
-    throw new Error(`Embedding count mismatch for meeting ${meetingId}`);
+    throw new Error(
+      `Embedding count mismatch for meeting ${meetingId}`,
+    );
   }
 
-  await MemoryChunk.deleteMany({ meetingId });
+  await MemoryChunk.deleteMany({ meetingId, userId });
 
-  const docs = chunks.map((chunk, i) => ({
+  const docs = chunks.map((chunk, index) => ({
     meetingId,
     userId,
     content: chunk.content,
-    chunkIndex: i,
-    embedding: embeddings[i],
+    chunkIndex: index,
+    embedding: embeddings[index],
     metadata: {
       speakers: chunk.speakers,
       startTime: chunk.startTime,
@@ -81,6 +148,9 @@ export async function embedMeeting(
 
   await MemoryChunk.insertMany(docs);
 
-  // only mark indexed once chunks actually exist
-  await Meeting.findByIdAndUpdate(meetingId, { memoryIndexed: true });
+  // Mark indexed only after memory chunks have been inserted
+  await Meeting.findOneAndUpdate(
+    { _id: meetingId, userId },
+    { memoryIndexed: true },
+  );
 }

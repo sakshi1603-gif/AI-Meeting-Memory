@@ -1,9 +1,12 @@
+
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+
 import { meetingApi, queryApi } from '../api/api';
 import type { Meeting } from '../types/meeting';
 import type { QueryResponse } from '../types/summary';
+
 import QueryAnswer from '../components/QueryAnswer';
 import './Meetings.css';
 
@@ -18,40 +21,89 @@ function formatDate(iso: string) {
 
 function formatDuration(seconds: number) {
   const mins = Math.round(seconds / 60);
+
   if (mins < 1) return '<1 min';
   if (mins < 60) return `${mins} min`;
+
   const h = Math.floor(mins / 60);
   const m = mins % 60;
+
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 export default function MeetingDetail() {
   const { id } = useParams<{ id: string }>();
+
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
 
+  // Ask meeting states
   const [input, setInput] = useState('');
   const [askedQuestion, setAskedQuestion] = useState('');
   const [result, setResult] = useState<QueryResponse | null>(null);
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
 
+  // Summary regeneration states
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  const [regenerateSuccess, setRegenerateSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id) return;
+
     meetingApi
       .getById(id)
       .then(setMeeting)
       .catch(() => setLoadError('Could not load this meeting.'));
   }, [id]);
 
+  async function handleRegenerateSummary() {
+    if (!id || regenerating) return;
+
+    const confirmed = window.confirm(
+      meeting?.summary
+        ? 'Regenerate this meeting summary? The existing summary, decisions and action items will be replaced with newly generated results.'
+        : 'Generate a summary for this meeting using its saved transcript?'
+    );
+
+    if (!confirmed) return;
+
+    setRegenerating(true);
+    setRegenerateError(null);
+    setRegenerateSuccess(null);
+
+    try {
+      await meetingApi.regenerateSummary(id);
+
+      // Fetch the updated meeting from MongoDB
+      const updatedMeeting = await meetingApi.getById(id);
+
+      setMeeting(updatedMeeting);
+
+      setRegenerateSuccess('Meeting summary generated successfully.');
+    } catch (err: any) {
+      const message =
+        err.response?.data?.error ||
+        'Could not regenerate the summary. Please try again.';
+
+      setRegenerateError(message);
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
   async function handleAsk(e: FormEvent) {
     e.preventDefault();
+
     if (!input.trim() || asking || !id) return;
+
     setAskedQuestion(input);
     setResult(null);
     setAskError(null);
     setAsking(true);
+
     try {
       const data = await queryApi.ask(input, id);
       setResult(data);
@@ -73,11 +125,20 @@ export default function MeetingDetail() {
   if (!meeting) {
     return (
       <div className="page-shell">
-        <div className="meeting-card-skeleton" style={{ height: 60, marginBottom: 24 }} />
-        <div className="meeting-card-skeleton" style={{ height: 200 }} />
+        <div
+          className="meeting-card-skeleton"
+          style={{ height: 60, marginBottom: 24 }}
+        />
+        <div
+          className="meeting-card-skeleton"
+          style={{ height: 200 }}
+        />
       </div>
     );
   }
+
+  const canRegenerate =
+    meeting.status === 'ended' || meeting.status === 'failed';
 
   return (
     <div className="page-shell">
@@ -87,7 +148,10 @@ export default function MeetingDetail() {
 
       <div className="detail-header">
         <h1>{meeting.title}</h1>
-        <span className={`meeting-status meeting-status-${meeting.status}`}>{meeting.status}</span>
+
+        <span className={`meeting-status meeting-status-${meeting.status}`}>
+          {meeting.status}
+        </span>
       </div>
 
       <div className="detail-meta text-faint text-mono">
@@ -96,9 +160,41 @@ export default function MeetingDetail() {
         <span>{formatDuration(meeting.durationSeconds)}</span>
         <span>·</span>
         <span>
-          {meeting.participants.length > 0 ? meeting.participants.join(', ') : 'No participants listed'}
+          {meeting.participants.length > 0
+            ? meeting.participants.join(', ')
+            : 'No participants listed'}
         </span>
       </div>
+
+      {/* Summary regeneration */}
+      {canRegenerate && (
+        <div className="detail-section card">
+          <div className="detail-card-heading">
+            <h2>AI Summary</h2>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleRegenerateSummary}
+              disabled={regenerating}
+            >
+              {regenerating
+                ? 'Generating...'
+                : meeting.summary
+                  ? 'Regenerate Summary'
+                  : 'Generate Summary'}
+            </button>
+          </div>
+
+          {regenerateError && (
+            <p className="page-error">{regenerateError}</p>
+          )}
+
+          {regenerateSuccess && (
+            <p className="text-secondary">{regenerateSuccess}</p>
+          )}
+        </div>
+      )}
 
       {meeting.summary && (
         <div className="detail-section card">
@@ -110,9 +206,10 @@ export default function MeetingDetail() {
       {meeting.keyDecisions.length > 0 && (
         <div className="detail-section card">
           <h2>Key decisions</h2>
+
           <ul className="detail-list">
-            {meeting.keyDecisions.map((d, i) => (
-              <li key={i}>{d}</li>
+            {meeting.keyDecisions.map((decision, index) => (
+              <li key={index}>{decision}</li>
             ))}
           </ul>
         </div>
@@ -121,13 +218,22 @@ export default function MeetingDetail() {
       {meeting.actionItems.length > 0 && (
         <div className="detail-section card">
           <h2>Action items</h2>
+
           <ul className="detail-action-list">
             {meeting.actionItems.map((item) => (
-              <li key={item._id} className={item.done ? 'detail-action-done' : ''}>
-                <span className="detail-action-text">{item.text}</span>
+              <li
+                key={item._id}
+                className={item.done ? 'detail-action-done' : ''}
+              >
+                <span className="detail-action-text">
+                  {item.text}
+                </span>
+
                 <span className="text-faint text-mono">
                   {item.owner ?? 'Unassigned'}
-                  {item.dueDate ? ` · ${new Date(item.dueDate).toLocaleDateString()}` : ''}
+                  {item.dueDate
+                    ? ` · ${new Date(item.dueDate).toLocaleDateString()}`
+                    : ''}
                 </span>
               </li>
             ))}
@@ -135,10 +241,15 @@ export default function MeetingDetail() {
         </div>
       )}
 
+      {/* Transcript */}
       <div className="detail-section card">
-        <button className="btn btn-ghost" onClick={() => setShowTranscript((v) => !v)}>
+        <button
+          className="btn btn-ghost"
+          onClick={() => setShowTranscript((value) => !value)}
+        >
           {showTranscript ? 'Hide transcript' : 'Show transcript'}
         </button>
+
         {showTranscript && (
           <p className="detail-transcript text-mono">
             {meeting.rawTranscript || 'No transcript available.'}
@@ -146,8 +257,10 @@ export default function MeetingDetail() {
         )}
       </div>
 
+      {/* Ask this meeting */}
       <div className="detail-section card">
         <h2>Ask this meeting</h2>
+
         <form onSubmit={handleAsk} className="detail-ask-form">
           <input
             className="search-input-inline"
@@ -155,11 +268,22 @@ export default function MeetingDetail() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
-          <button type="submit" className="btn btn-primary" disabled={asking || !input.trim()}>
+
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={asking || !input.trim()}
+          >
             Ask
           </button>
         </form>
-        <QueryAnswer question={askedQuestion} result={result} loading={asking} error={askError} />
+
+        <QueryAnswer
+          question={askedQuestion}
+          result={result}
+          loading={asking}
+          error={askError}
+        />
       </div>
     </div>
   );

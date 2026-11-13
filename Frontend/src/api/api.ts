@@ -9,9 +9,11 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('amm_token');
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 
@@ -22,6 +24,7 @@ api.interceptors.response.use(
       localStorage.removeItem('amm_token');
       localStorage.removeItem('amm_user');
     }
+
     return Promise.reject(error);
   }
 );
@@ -39,12 +42,20 @@ export interface AuthResponse {
 
 export const authApi = {
   login: async (email: string, password: string) => {
-    const { data } = await api.post<AuthResponse>('/auth/login', { email, password });
+    const { data } = await api.post<AuthResponse>(
+      '/auth/login',
+      { email, password }
+    );
+
     return data;
   },
 
   signup: async (name: string, email: string, password: string) => {
-    const { data } = await api.post<AuthResponse>('/auth/signup', { name, email, password });
+    const { data } = await api.post<AuthResponse>(
+      '/auth/signup',
+      { name, email, password }
+    );
+
     return data;
   },
 
@@ -80,12 +91,25 @@ export const meetingApi = {
     const { data } = await api.delete(`/meetings/${id}`);
     return data;
   },
+
+  // POST /api/meetings/:id/regenerate-summary
+  regenerateSummary: async (id: string) => {
+    const { data } = await api.post(
+      `/meetings/${id}/regenerate-summary`
+    );
+
+    return data;
+  },
 };
 
 export const queryApi = {
   // POST /api/query
   ask: async (question: string, meetingId?: string) => {
-    const { data } = await api.post<QueryResponse>('/query', { question, meetingId });
+    const { data } = await api.post<QueryResponse>(
+      '/query',
+      { question, meetingId }
+    );
+
     return data;
   },
 };
