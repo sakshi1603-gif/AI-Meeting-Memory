@@ -1,134 +1,153 @@
-# AI Meeting Memory System
+# AI Meeting Memory
 
-Teams make real decisions in meetings, but that decision-making disappears into scattered notes, memory, and chat threads. Weeks later, nobody can answer "what did we actually agree on last time" without hunting through people's memory or re-reading transcripts nobody has time for.
+Record meetings, get a live transcript and AI-generated notes, then ask questions across your whole meeting history and get answers with citations.
 
-**AI Meeting Memory turns every meeting into a searchable, permanent institutional memory** — record a meeting, get an AI-generated summary with decisions and action items automatically, then ask it a plain-language question across *all* your meetings and get a grounded answer with a citation to exactly which meeting it came from.
-
----
+**Live demo:** https://ai-meeting-memory.vercel.app · **Backend:** https://ai-meeting-memory.onrender.com
 
 ## Features
 
-| Feature | Status |
-|---|---|
-| Live mic capture + real-time transcription (Deepgram streaming) | ✅ Working |
-| Persistent meeting storage (MongoDB) | ✅ Working |
-| AI-generated summary per meeting | ✅ Working |
-| Decision & action item extraction with owners | ✅ Working |
-| Semantic memory search across all meetings (RAG) | ✅ Working |
-| Cited, grounded answers (meeting + timestamp) | ✅ Working |
-| Meeting dashboard (list + detail view) | ✅ Working |
-| Auth / user accounts, data scoped per user | ✅ Working |
-| Speaker diarization | ⬜ Not implemented |
-| Action item tracker with due dates | ⬜ Not implemented (schema supports it, no UI) |
-| Export summary as PDF / email | ⬜ Not implemented |
-| Live deployment | 🚧 In progress |
-
-The first 8 are the core product — everything above the line works end-to-end today, not just in isolation. The bottom three are intentionally out of scope for now rather than half-built.
-
----
+- **Live transcription:** browser mic audio streams over Socket.IO to Deepgram; transcript appears in 1-2 s.
+- **AI meeting notes:** title, summary, decisions, and action items (owner, due date) with Zod-validated structured output. Summaries can be regenerated.
+- **Meeting management:** meeting list and detail views; deleting a meeting also removes its transcript and memory chunks.
+- **Cross-meeting search (RAG):** ask a question in natural language; answers cite the source meeting and timestamp, optionally filtered to one meeting. If the excerpts don't contain the answer, the model says so instead of guessing.
+- **Auth and isolation:** JWT auth, bcrypt password hashing, and user-scoped queries with ownership checks on every meeting operation.
 
 ## Tech stack
 
-| Layer | Choice |
+| Area | Technologies |
 |---|---|
-| Frontend | React + Vite, TypeScript |
-| Realtime | Socket.io (live audio streaming + live transcript) |
-| Backend | Node.js + Express |
-| Database | MongoDB + Mongoose |
-| Vector search | MongoDB Atlas Vector Search |
-| Speech-to-text | Deepgram (streaming API, `nova-3`) |
-| LLM (summarization + RAG answers) | Google Gemini |
-| Embeddings | Gemini embeddings, 768 dimensions |
-| Auth | JWT + bcrypt |
-| Styling | Plain CSS, custom design tokens (no framework) |
-| Frontend hosting | Vercel *(pending)* |
-| Backend hosting | Render *(pending — needs a persistent server, not serverless, for long-lived sockets)* |
-
----
+| Frontend | React, Vite, React Router |
+| Backend | Node.js, Express, TypeScript |
+| Real-time | Socket.IO, Deepgram streaming |
+| LLM and embeddings | Google Gemini (`@google/genai`), `gemini-embedding-001` |
+| Database and vector search | MongoDB, Mongoose, MongoDB Atlas Vector Search |
+| Auth and validation | JWT, bcrypt, Zod |
+| Deployment | Vercel (frontend), Render (backend) |
 
 ## Architecture
 
-**Flow A — Live recording**
+```text
+Browser (React) ──MediaRecorder──▶ Socket.IO ──▶ Express backend ──▶ Deepgram
+        ▲                                              │
+        └──────── partial / final transcript ──────────┘
 
-1. Browser's `MediaRecorder` captures mic audio in small chunks.
-2. Each chunk streams to the backend over an authenticated Socket.io connection.
-3. Backend forwards each chunk to Deepgram's streaming endpoint as it arrives.
-4. Deepgram returns transcript segments in real time; backend relays them back to the client as live captions.
-5. On "End meeting," the backend saves the full transcript to MongoDB and kicks off two background jobs: summarization (summary, decisions, action items via Gemini) and embedding (chunk the transcript, embed each chunk, store vectors) — both async so the user isn't blocked.
+Meeting ends:
+  persist transcript ─▶ MongoDB
+  ─▶ Gemini structured summarization ─▶ save title, summary, decisions, action items
+  ─▶ chunk transcript ─▶ embed ─▶ store memory chunks
 
-**Flow B — Memory query (RAG)**
-
-1. User asks a question, either scoped to one meeting or across all of them.
-2. The question is embedded and matched against stored vectors via Atlas Vector Search, filtered to the current user (and meeting, if scoped).
-3. The top matching transcript chunks are passed to Gemini along with the question.
-4. Gemini returns an answer grounded only in those excerpts, with citations back to the source meeting and timestamp.
-
----
-
-## Setup
-
-```bash
-# backend
-cd backend
-npm install
+Search:
+  question ─▶ embed ─▶ Atlas Vector Search (scoped to user)
+  ─▶ load meeting metadata ─▶ Gemini grounded answer ─▶ answer + citations
 ```
 
-Create `backend/.env`:
+### RAG pipeline
 
+1. Split the transcript into chunks and embed each one (768 dimensions).
+2. Store chunk text, embedding, `userId`, `meetingId`, speakers, and start/end times in MongoDB.
+3. Embed the question and run Atlas Vector Search (index `vector_index`, field `embedding`, limit 8, candidates `limit * 15`), filtered by `userId` and optionally `meetingId`.
+4. Build excerpts with meeting title, date, and timestamps, and ask Gemini to answer only from them, returning JSON.
+5. Validate the response (with a coercion path for malformed or overlong fields) and return the answer with citations.
+
+The Atlas index must match the embedding field and dimensions above.
+
+## Project structure
+
+```text
+Backend/    src/{models,services,controllers,routes}, server.ts
+Frontend/   src/{components,pages}
 ```
-MONGODB_URI=your_atlas_connection_string
-JWT_SECRET=your_secret
+
+## Environment variables
+
+Create `Backend/.env` (never commit it):
+
+```env
+PORT=5000
+FRONTEND_URL=http://localhost:5173
+
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_long_random_secret
 JWT_EXPIRES_IN=7d
-GEMINI_API_KEY=your_key
-GEMINI_EMBEDDING_MODEL=text-embedding-004
-DEEPGRAM_API_KEY=your_key
+
+DEEPGRAM_API_KEY=your_deepgram_api_key
+GEMINI_API_KEY=your_gemini_api_key
+
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+GEMINI_MODEL=your_supported_gemini_generation_model
+GEMINI_FALLBACK_MODEL=your_supported_fallback_model
 ```
 
-You'll also need an Atlas Vector Search index named `vector_index` on the `memorychunks` collection:
+Model names change; use models available to your Google AI API key. In production, set these in the Render dashboard.
 
-```json
-{
-  "fields": [
-    { "type": "vector", "path": "embedding", "numDimensions": 768, "similarity": "cosine" },
-    { "type": "filter", "path": "userId" },
-    { "type": "filter", "path": "meetingId" }
-  ]
-}
-```
+## Local setup
+
+Prerequisites: Node.js, a MongoDB Atlas cluster with the vector index above, and Gemini and Deepgram API keys.
 
 ```bash
-npm run dev
+git clone https://github.com/sakshi1603-gif/AI-Meeting-Memory.git
+cd AI-Meeting-Memory
+
+# backend (http://localhost:5000)
+cd Backend && npm install && npm run dev
+
+# frontend (http://localhost:5173), in a second terminal
+cd Frontend && npm install && npm run dev
 ```
 
-```bash
-# frontend
-cd frontend
-npm install
-npm run dev
-```
+Type-check the backend with `npx tsc --noEmit`.
 
-Create `frontend/.env`:
+## Performance
 
-```
-VITE_API_URL=http://localhost:5000
-```
+Measured on 13 November 2026. These are real observations from different environments, not a controlled load test.
 
----
+**Production `/query`, browser Network panel (6 requests):** 2.28, 9.51, 2.80, 27.68, 1.87, 3.88 s
 
-## Notable engineering decisions & bugs fixed along the way
+| | Median | Mean | Min | Max |
+|---|---:|---:|---:|---:|
+| End-to-end | 3.34 s | 8.00 s | 1.87 s | 27.68 s |
 
-Worth mentioning in an interview, not hiding:
+**Local RAG stage timings (3 runs):**
 
-- **WebM header buffering** — `MediaRecorder` only sends full container headers in the first chunk, which broke Deepgram's stream parsing on later chunks. Fixed by buffering chunks until the Deepgram connection is confirmed open, then flushing them in order.
-- **Cross-user data leakage** — meetings and memory chunks initially had no owner field at all, meaning any logged-in user could see every user's meetings. Fixed by adding `userId` to both the `Meeting` and `MemoryChunk` schemas, scoping every route and socket handler by the authenticated user, and authenticating the Socket.io handshake itself (not just REST requests) with the same JWT.
-- **Silent RAG failures** — search returned empty results even with valid data because the Atlas Vector Search index didn't have `userId`/`meetingId` registered as filterable fields, so every filtered query matched nothing without throwing an error. Fixed by rebuilding the index with the correct field types.
+| Stage | Run 1 | Run 2 | Run 3 |
+|---|---:|---:|---:|
+| Embedding | 1,149 ms | 939 ms | 619 ms |
+| Vector search | 155 ms | 264 ms | 90 ms |
+| Metadata lookup | 46 ms | 50 ms | 49 ms |
+| Gemini | 2,120 ms | 1,592 ms | 3,997 ms |
+| **Total** | **3,470 ms** | **2,845 ms** | **4,755 ms** |
 
----
+Mean total 3.69 s; mean Gemini stage 2.57 s.
 
-## What's intentionally not built
+**Other:** meetings list ~439 ms, meeting detail ~454 ms, end meeting to summary visible ~4 s, live transcript 1-2 s.
 
-- Speaker diarization — Deepgram supports it, but per-speaker attribution wasn't core to proving the memory/RAG concept, so it was deferred.
-- Action item completion tracking — the data model supports a `done` flag, but there's no UI to toggle it yet.
-- PDF/email export of summaries.
+- Gemini generation is the largest share of RAG latency and the source of the variance (earlier local diagnostics ranged from ~1.9 s to over 35 s for that stage).
+- The 27.68 s request skews the production mean; the median is the better typical figure.
+- Six requests are too few for p95/p99. Concurrency and sustained load are not measured.
 
-These were left out deliberately rather than attempted and left broken — the core recording → transcription → summarization → search loop was prioritized to be solid end-to-end first.
+## Testing
+
+Manually verified (no automated test suite yet):
+
+- Live streaming, Deepgram transcription, and transcript persistence
+- Summary and title generation, regenerate summary, meeting deletion including memory records
+- Cross-user isolation (a second account cannot access another user's meetings)
+- Multi-meeting RAG, unsupported questions (graceful "not found"), no-speech meetings
+- Mic permission denied, duplicate "End meeting" clicks
+- Atlas chunks contain `userId`, `meetingId`, and 768-dim embeddings
+- Production `/query` through the deployed app; backend `tsc --noEmit` passes
+
+## Known limitations
+
+- **LLM latency varies** widely between requests (1.87-27.68 s in production sampling).
+- **Citation quotes** longer than the schema's 200-character limit are truncated; a validation warning has still appeared in local logs.
+- **Deepgram** timeouts and reconnects have been observed; possible audio loss has not been ruled out.
+- **Meeting duration** can display longer than the actual recording.
+- **Not yet tested:** concurrent users, p95/p99 latency, sustained load.
+
+## Planned
+
+- Fixed-question production benchmark with enough samples for p50/p95/p99
+- Concurrency and load testing
+- Reconnection handling for Deepgram and a corrected duration calculation
+- Loading states or streaming for slow LLM responses
